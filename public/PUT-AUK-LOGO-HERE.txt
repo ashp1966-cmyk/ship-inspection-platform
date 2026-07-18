@@ -1,0 +1,5 @@
+PUT YOUR AUK_Logo.png HERE AND RENAME IT TO:
+
+    auk-logo.png
+
+The login page and header both load it from /public/auk-logo.png
