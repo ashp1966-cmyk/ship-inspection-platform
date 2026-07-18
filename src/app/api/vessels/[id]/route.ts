@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
-  const [v] = await sql`SELECT * FROM vessels WHERE id = ${params.id}` as any[];
+export async function GET(_: Request, props: { params: Promise<{ id: string }> }) {
+  const { id } = await props.params;
+  const [v] = await sql`SELECT * FROM vessels WHERE id = ${id}` as any[];
   if (!v) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(v);
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, props: { params: Promise<{ id: string }> }) {
+  const { id } = await props.params;
   const b = await req.json();
   const [v] = await sql`
     UPDATE vessels SET
@@ -24,13 +26,14 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       capacity_note = ${b.capacity_note ?? null},
       dry_dock_due = ${b.dry_dock_due ?? null},
       updated_at = NOW()
-    WHERE id = ${params.id}
+    WHERE id = ${id}
     RETURNING *
   ` as any[];
   return NextResponse.json(v);
 }
 
-export async function DELETE(_: Request, { params }: { params: { id: string } }) {
-  await sql`DELETE FROM vessels WHERE id = ${params.id}`;
+export async function DELETE(_: Request, props: { params: Promise<{ id: string }> }) {
+  const { id } = await props.params;
+  await sql`DELETE FROM vessels WHERE id = ${id}`;
   return NextResponse.json({ ok: true });
 }
