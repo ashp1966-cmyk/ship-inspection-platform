@@ -9,6 +9,10 @@ const SECRET = new TextEncoder().encode(
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  const res = NextResponse.next();
+  // Pass pathname to layout so it can hide header on /login
+  res.headers.set("x-pathname", pathname);
+
   if (
     pathname.startsWith("/login") ||
     pathname.startsWith("/api/auth") ||
@@ -16,22 +20,21 @@ export async function proxy(req: NextRequest) {
     pathname.startsWith("/favicon") ||
     pathname.startsWith("/auk-logo")
   ) {
-    return NextResponse.next();
+    return res;
   }
 
   const token = req.cookies.get("ship_session")?.value;
-
   if (!token) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
   try {
     await jwtVerify(token, SECRET);
-    return NextResponse.next();
-  } catch {
-    const res = NextResponse.redirect(new URL("/login", req.url));
-    res.cookies.set("ship_session", "", { maxAge: 0, path: "/" });
     return res;
+  } catch {
+    const redirect = NextResponse.redirect(new URL("/login", req.url));
+    redirect.cookies.set("ship_session", "", { maxAge: 0, path: "/" });
+    return redirect;
   }
 }
 
