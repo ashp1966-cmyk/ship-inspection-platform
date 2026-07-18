@@ -32,6 +32,7 @@ export interface Question {
   id: string;
   prompt: string;
   answerKind: "GRADE" | "YES_NO" | "TEXT" | "NUMBER" | "DATE";
+  custom?: boolean;
 }
 
 export interface Section {
