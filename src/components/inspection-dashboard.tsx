@@ -9,15 +9,39 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  VESSEL_TYPES, GRADES, getConditionSections, getPrePurchaseInventory,
-  type VesselType, type Grade, type Question, type EquipmentItem,
+  VESSEL_TYPES, GRADES, getConditionSections, getPrePurchaseSections, getPrePurchaseInventory,
+  type VesselType, type Grade, type Question, type EquipmentItem, type Section,
 } from "@/lib/inspection-templates";
 import { projectFleet, usd, HORIZON_YEARS } from "@/lib/capex";
+import { cn } from "@/lib/utils";
 
 interface Attachment { name:string; url:string; fileType:"photo"|"document"; size:number; uploading?:boolean; }
 interface VesselRow { id:string; name:string; imo_number:string; vessel_type:VesselType; }
 
 const TEAL="#1BA5C0";
+
+// Group sections into logical clusters so the long question list can be
+// browsed via sub-tabs instead of one giant scroll. "equipment" is a
+// pseudo-group with no sections — it just toggles the inventory/CapEx
+// tables in the Pre-Purchase view.
+type GroupDef = { key:string; label:string; codes:string[] };
+const QUESTION_GROUPS: GroupDef[] = [
+  { key:"general",     label:"General & Documentation", codes:["CERTIFICATION","CREW_MGMT","ACCOMMODATION"] },
+  { key:"nav_safety",  label:"Navigation & Safety",      codes:["NAVIGATION","SAFETY_MGMT","POLLUTION"] },
+  { key:"structural",  label:"Structural & Ballast",     codes:["STRUCTURAL","BALLAST"] },
+  { key:"machinery",   label:"Machinery & Deck",         codes:["DECK_MACHINERY","ENGINE_ROOM"] },
+  { key:"cargo",       label:"Cargo Systems",            codes:["CARGO_HOLDS","CONTAINER_SYS","CARGO_TANKS","CARGO_CONTAINMENT","TWEEN_DECKS","GAS_SYSTEMS","HOTEL_PAX"] },
+];
+const DUE_DILIGENCE_GROUP: GroupDef = {
+  key:"due_diligence", label:"Due Diligence",
+  codes:["VESSEL_HISTORY","CLASS_SURVEY_STATUS","DOC_REVIEW_PP","VESSEL_PERFORMANCE","SPACES_INSPECTED","CARGO_MACHINERY_PARTICULARS","DEFICIENCY_REGISTER"],
+};
+
+function groupSections(sections: Section[], groups: GroupDef[]) {
+  return groups
+    .map(g => ({ ...g, sections: sections.filter(s => g.codes.includes(s.code)) }))
+    .filter(g => g.sections.length > 0);
+}
 
 export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] }) {
   const [vesselType, setVesselType] = useState<VesselType>("BULK_CARRIER");
@@ -45,7 +69,34 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
     return base.map(s => ({ ...s, questions: [...s.questions, ...(customSections[s.code]??[])] }));
   }, [vesselType, customSections]);
 
+  // Pre-Purchase includes the full Condition scope PLUS the additional
+  // due-diligence sections (vessel history, class/survey status, document
+  // review, performance, spaces available, particulars verification and
+  // a deficiency-risk summary) — the pre-purchase model has substantially
+  // more questions than the condition model.
+  const prePurchaseSections = useMemo(() => {
+    const base = getPrePurchaseSections(vesselType);
+    return base.map(s => ({ ...s, questions: [...s.questions, ...(customSections[s.code]??[])] }));
+  }, [vesselType, customSections]);
+
   const projection = useMemo(() => projectFleet(inventory), [inventory]);
+
+  const conditionGroups = useMemo(
+    () => groupSections(conditionSections, QUESTION_GROUPS),
+    [conditionSections]
+  );
+  const prePurchaseGroups = useMemo(
+    () => groupSections(prePurchaseSections, [...QUESTION_GROUPS, DUE_DILIGENCE_GROUP]),
+    [prePurchaseSections]
+  );
+
+  const [conditionGroupKey, setConditionGroupKey] = useState<string>("general");
+  const [prePurchaseGroupKey, setPrePurchaseGroupKey] = useState<string>("general");
+
+  const activeConditionGroup = conditionGroups.find(g => g.key === conditionGroupKey) ?? conditionGroups[0];
+  const activePrePurchaseGroup = prePurchaseGroupKey === "equipment"
+    ? null
+    : prePurchaseGroups.find(g => g.key === prePurchaseGroupKey) ?? prePurchaseGroups[0];
 
   function handleVesselType(v: VesselType) {
     setVesselType(v); setAnswers({}); setRemarks({}); setAttachments({});
@@ -106,9 +157,10 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
     setTimeout(() => fileInputRef.current?.click(), 50);
   }
 
-  function buildQuestionMeta(): Record<string, string> {
+  function buildQuestionMeta(type: "CONDITION"|"PRE_PURCHASE"): Record<string, string> {
     const meta: Record<string, string> = {};
-    for (const s of conditionSections) {
+    const sections = type === "PRE_PURCHASE" ? prePurchaseSections : conditionSections;
+    for (const s of sections) {
       for (const q of s.questions) meta[q.id] = q.answerKind;
     }
     return meta;
@@ -123,7 +175,7 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
         body: JSON.stringify({
           vesselId: selectedVessel || null,
           vesselType, inspectionType: type,
-          answers, questionMeta: buildQuestionMeta(), remarks, attachments,
+          answers, questionMeta: buildQuestionMeta(type), remarks, attachments,
           inventory: type==="PRE_PURCHASE" ? inventory : undefined,
           projection: type==="PRE_PURCHASE" ? projection : undefined,
         }),
@@ -252,6 +304,97 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
     );
   }
 
+  function renderGroupPills(
+    groups: { key:string; label:string; sections:Section[] }[],
+    activeKey: string,
+    setActiveKey: (k:string) => void,
+    extraTabs?: { key:string; label:string }[]
+  ) {
+    return (
+      <div className="flex flex-wrap gap-2 border-b pb-3">
+        {groups.map(g => {
+          const count = g.sections.reduce((n,s)=>n+s.questions.length, 0);
+          const active = g.key === activeKey;
+          return (
+            <button key={g.key} onClick={()=>setActiveKey(g.key)}
+              className={cn(
+                "rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors",
+                active ? "border-transparent text-white" : "border-gray-300 text-gray-600 bg-white hover:bg-gray-50"
+              )}
+              style={active ? { background: TEAL } : undefined}>
+              {g.label} <span className="opacity-70">({count})</span>
+            </button>
+          );
+        })}
+        {extraTabs?.map(t => {
+          const active = t.key === activeKey;
+          return (
+            <button key={t.key} onClick={()=>setActiveKey(t.key)}
+              className={cn(
+                "rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors",
+                active ? "border-transparent text-white" : "border-gray-300 text-gray-600 bg-white hover:bg-gray-50"
+              )}
+              style={active ? { background: TEAL } : undefined}>
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function renderSectionAccordion(sections: Section[]) {
+    return (
+      <Accordion type="multiple" className="space-y-2">
+        {sections.map(section => (
+          <AccordionItem key={section.code} value={section.code} className="rounded-lg border px-4">
+            <AccordionTrigger className="text-left py-3">
+              <span className="flex items-center gap-2 text-sm font-medium">
+                {section.title}
+                {section.vesselType && (
+                  <Badge variant="outline" className="text-[10px] font-normal">
+                    {VESSEL_TYPES.find(t=>t.value===section.vesselType)?.label}
+                  </Badge>
+                )}
+                <span className="text-xs text-muted-foreground font-normal">({section.questions.length})</span>
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="pb-4">
+              {section.questions.map(q => renderQuestion(q, section.code))}
+
+              {addingTo===section.code ? (
+                <div className="mt-3 p-3 rounded-md border border-blue-200 bg-blue-50 space-y-2">
+                  <p className="text-xs font-medium text-blue-700">Add question to this section</p>
+                  <Input placeholder="Question prompt…" value={newPrompt} onChange={e=>setNewPrompt(e.target.value)}
+                    onKeyDown={e=>e.key==="Enter"&&addCustomQuestion(section.code)} autoFocus className="text-sm" />
+                  <div className="flex gap-2 items-center">
+                    <Select value={newKind} onValueChange={v=>setNewKind(v as Question["answerKind"])}>
+                      <SelectTrigger className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="GRADE">Grade</SelectItem>
+                        <SelectItem value="YES_NO">Yes / No</SelectItem>
+                        <SelectItem value="TEXT">Text</SelectItem>
+                        <SelectItem value="DATE">Date</SelectItem>
+                        <SelectItem value="NUMBER">Number</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button size="sm" className="h-8 text-xs" onClick={()=>addCustomQuestion(section.code)}>Add</Button>
+                    <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={()=>{setAddingTo(null);setNewPrompt("");}}>Cancel</Button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={()=>{setAddingTo(section.code);setNewPrompt("");}}
+                  className="mt-3 text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
+                  <span className="text-base leading-none">+</span> Add question
+                </button>
+              )}
+            </AccordionContent>
+          </AccordionItem>
+        ))}
+      </Accordion>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-5 p-4 md:p-6">
       {/* Hidden file input */}
@@ -292,53 +435,8 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
 
         {/* CONDITION TAB */}
         <TabsContent value="condition" className="space-y-3 mt-4">
-          <Accordion type="multiple" className="space-y-2">
-            {conditionSections.map(section => (
-              <AccordionItem key={section.code} value={section.code} className="rounded-lg border px-4">
-                <AccordionTrigger className="text-left py-3">
-                  <span className="flex items-center gap-2 text-sm font-medium">
-                    {section.title}
-                    {section.vesselType && (
-                      <Badge variant="outline" className="text-[10px] font-normal">
-                        {VESSEL_TYPES.find(t=>t.value===section.vesselType)?.label}
-                      </Badge>
-                    )}
-                    <span className="text-xs text-muted-foreground font-normal">({section.questions.length})</span>
-                  </span>
-                </AccordionTrigger>
-                <AccordionContent className="pb-4">
-                  {section.questions.map(q => renderQuestion(q, section.code))}
-
-                  {addingTo===section.code ? (
-                    <div className="mt-3 p-3 rounded-md border border-blue-200 bg-blue-50 space-y-2">
-                      <p className="text-xs font-medium text-blue-700">Add question to this section</p>
-                      <Input placeholder="Question prompt…" value={newPrompt} onChange={e=>setNewPrompt(e.target.value)}
-                        onKeyDown={e=>e.key==="Enter"&&addCustomQuestion(section.code)} autoFocus className="text-sm" />
-                      <div className="flex gap-2 items-center">
-                        <Select value={newKind} onValueChange={v=>setNewKind(v as Question["answerKind"])}>
-                          <SelectTrigger className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="GRADE">Grade</SelectItem>
-                            <SelectItem value="YES_NO">Yes / No</SelectItem>
-                            <SelectItem value="TEXT">Text</SelectItem>
-                            <SelectItem value="DATE">Date</SelectItem>
-                            <SelectItem value="NUMBER">Number</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button size="sm" className="h-8 text-xs" onClick={()=>addCustomQuestion(section.code)}>Add</Button>
-                        <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={()=>{setAddingTo(null);setNewPrompt("");}}>Cancel</Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button onClick={()=>{setAddingTo(section.code);setNewPrompt("");}}
-                      className="mt-3 text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
-                      <span className="text-base leading-none">+</span> Add question
-                    </button>
-                  )}
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
+          {renderGroupPills(conditionGroups, conditionGroupKey, setConditionGroupKey)}
+          {activeConditionGroup && renderSectionAccordion(activeConditionGroup.sections)}
           <div className="flex items-center gap-3 pt-2">
             <Button onClick={()=>saveInspection("CONDITION")} disabled={saving}>
               {saving ? "Saving…" : "Save condition inspection"}
@@ -350,80 +448,91 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
 
         {/* PRE-PURCHASE TAB */}
         <TabsContent value="prepurchase" className="space-y-5 mt-4">
-          <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">Equipment Inventory & CapEx Inputs</CardTitle></CardHeader>
-            <CardContent className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="min-w-[180px]">Equipment</TableHead>
-                    <TableHead className="min-w-[130px]">Model no.</TableHead>
-                    <TableHead className="min-w-[130px]">Serial no.</TableHead>
-                    <TableHead className="min-w-[130px]">Grade</TableHead>
-                    <TableHead className="text-right">Repair USD</TableHead>
-                    <TableHead className="text-right">Maint USD/yr</TableHead>
-                    <TableHead className="text-right">Life yrs</TableHead>
-                    <TableHead className="text-right">Replace USD</TableHead>
-                    <TableHead>Remarks</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {inventory.map(item => (
-                    <TableRow key={item.id}>
-                      <TableCell><Input value={item.equipmentName} onChange={e=>updateItem(item.id,{equipmentName:e.target.value})} className="h-7 text-sm"/></TableCell>
-                      <TableCell><Input placeholder="Model" value={item.equipmentModel} onChange={e=>updateItem(item.id,{equipmentModel:e.target.value})} className="h-7 text-sm"/></TableCell>
-                      <TableCell><Input placeholder="Serial" value={item.equipmentSerial} onChange={e=>updateItem(item.id,{equipmentSerial:e.target.value})} className="h-7 text-sm"/></TableCell>
-                      <TableCell>
-                        <Select value={item.grade} onValueChange={v=>updateItem(item.id,{grade:v as Grade})}>
-                          <SelectTrigger className="h-7 text-sm"><SelectValue placeholder="Grade"/></SelectTrigger>
-                          <SelectContent>{GRADES.map(g=><SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>)}</SelectContent>
-                        </Select>
-                      </TableCell>
-                      {(["estimatedRepairCost","annualMaintCost","remainingLifeYears","replacementCost"] as const).map(field=>(
-                        <TableCell key={field} className="text-right">
-                          <Input type="number" min={0} className="h-7 text-right text-sm w-24" value={item[field]}
-                            onChange={e=>updateItem(item.id,{[field]:Number(e.target.value)})}/>
-                        </TableCell>
-                      ))}
-                      <TableCell><Input placeholder="Notes…" value={item.remarks} onChange={e=>updateItem(item.id,{remarks:e.target.value})} className="h-7 text-sm min-w-[120px]"/></TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          {renderGroupPills(
+            prePurchaseGroups, prePurchaseGroupKey, setPrePurchaseGroupKey,
+            [{ key:"equipment", label:"Equipment & CapEx" }]
+          )}
 
-          <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">5-Year CapEx & Lifecycle Projection</CardTitle></CardHeader>
-            <CardContent className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Equipment</TableHead>
-                    {Array.from({length:HORIZON_YEARS},(_,i)=><TableHead key={i} className="text-right">Year {i+1}</TableHead>)}
-                    <TableHead className="text-right">5-yr total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {projection.items.map(p=>(
-                    <TableRow key={p.itemId}>
-                      <TableCell className="text-sm">
-                        {p.equipmentName}
-                        {p.replacementYear && <Badge variant="destructive" className="ml-2 text-[10px]">Replace Y{p.replacementYear}</Badge>}
-                      </TableCell>
-                      {p.years.map((y,i)=><TableCell key={i} className="text-right tabular-nums text-sm">{usd(y)}</TableCell>)}
-                      <TableCell className="text-right font-medium tabular-nums text-sm">{usd(p.total)}</TableCell>
-                    </TableRow>
-                  ))}
-                  <TableRow className="border-t-2 font-semibold">
-                    <TableCell>Fleet total</TableCell>
-                    {projection.yearTotals.map((y,i)=><TableCell key={i} className="text-right tabular-nums">{usd(y)}</TableCell>)}
-                    <TableCell className="text-right tabular-nums">{usd(projection.grandTotal)}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          {activePrePurchaseGroup && renderSectionAccordion(activePrePurchaseGroup.sections)}
+
+          {prePurchaseGroupKey === "equipment" && (
+            <>
+              <Card>
+                <CardHeader className="pb-3"><CardTitle className="text-base">Equipment Inventory & CapEx Inputs</CardTitle></CardHeader>
+                <CardContent className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="min-w-[180px]">Equipment</TableHead>
+                        <TableHead className="min-w-[130px]">Model no.</TableHead>
+                        <TableHead className="min-w-[130px]">Serial no.</TableHead>
+                        <TableHead className="min-w-[130px]">Grade</TableHead>
+                        <TableHead className="text-right">Repair USD</TableHead>
+                        <TableHead className="text-right">Maint USD/yr</TableHead>
+                        <TableHead className="text-right">Life yrs</TableHead>
+                        <TableHead className="text-right">Replace USD</TableHead>
+                        <TableHead>Remarks</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {inventory.map(item => (
+                        <TableRow key={item.id}>
+                          <TableCell><Input value={item.equipmentName} onChange={e=>updateItem(item.id,{equipmentName:e.target.value})} className="h-7 text-sm"/></TableCell>
+                          <TableCell><Input placeholder="Model" value={item.equipmentModel} onChange={e=>updateItem(item.id,{equipmentModel:e.target.value})} className="h-7 text-sm"/></TableCell>
+                          <TableCell><Input placeholder="Serial" value={item.equipmentSerial} onChange={e=>updateItem(item.id,{equipmentSerial:e.target.value})} className="h-7 text-sm"/></TableCell>
+                          <TableCell>
+                            <Select value={item.grade} onValueChange={v=>updateItem(item.id,{grade:v as Grade})}>
+                              <SelectTrigger className="h-7 text-sm"><SelectValue placeholder="Grade"/></SelectTrigger>
+                              <SelectContent>{GRADES.map(g=><SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>)}</SelectContent>
+                            </Select>
+                          </TableCell>
+                          {(["estimatedRepairCost","annualMaintCost","remainingLifeYears","replacementCost"] as const).map(field=>(
+                            <TableCell key={field} className="text-right">
+                              <Input type="number" min={0} className="h-7 text-right text-sm w-24" value={item[field]}
+                                onChange={e=>updateItem(item.id,{[field]:Number(e.target.value)})}/>
+                            </TableCell>
+                          ))}
+                          <TableCell><Input placeholder="Notes…" value={item.remarks} onChange={e=>updateItem(item.id,{remarks:e.target.value})} className="h-7 text-sm min-w-[120px]"/></TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3"><CardTitle className="text-base">5-Year CapEx & Lifecycle Projection</CardTitle></CardHeader>
+                <CardContent className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Equipment</TableHead>
+                        {Array.from({length:HORIZON_YEARS},(_,i)=><TableHead key={i} className="text-right">Year {i+1}</TableHead>)}
+                        <TableHead className="text-right">5-yr total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {projection.items.map(p=>(
+                        <TableRow key={p.itemId}>
+                          <TableCell className="text-sm">
+                            {p.equipmentName}
+                            {p.replacementYear && <Badge variant="destructive" className="ml-2 text-[10px]">Replace Y{p.replacementYear}</Badge>}
+                          </TableCell>
+                          {p.years.map((y,i)=><TableCell key={i} className="text-right tabular-nums text-sm">{usd(y)}</TableCell>)}
+                          <TableCell className="text-right font-medium tabular-nums text-sm">{usd(p.total)}</TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow className="border-t-2 font-semibold">
+                        <TableCell>Fleet total</TableCell>
+                        {projection.yearTotals.map((y,i)=><TableCell key={i} className="text-right tabular-nums">{usd(y)}</TableCell>)}
+                        <TableCell className="text-right tabular-nums">{usd(projection.grandTotal)}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </>
+          )}
 
           <div className="flex items-center gap-3 pt-1">
             <Button onClick={()=>saveInspection("PRE_PURCHASE")} disabled={saving}>

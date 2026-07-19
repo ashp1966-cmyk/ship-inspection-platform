@@ -104,3 +104,74 @@ INSERT INTO template_sections (inspection_type, vessel_type, code, title, sort_o
 ('PRE_PURCHASE','GENERAL_CARGO','CARGO_GEAR_INV','Cargo Gear & Hatch Cover Inventory',60),
 ('PRE_PURCHASE','LPG_TANKER','GAS_PLANT_INV','Compressors & Gas Plant Inventory',60),
 ('PRE_PURCHASE','CRUISE_SHIP','HOTEL_PLANT_INV','Hotel Plant & Evacuation Systems Inventory',60);
+
+-- ============ PRE-PURCHASE — ADDITIONAL DUE-DILIGENCE SECTIONS =======
+-- Beyond the Condition scope + inventory, a pre-purchase survey also
+-- covers vessel history, class/survey status, document review,
+-- performance, space access and a deficiency-risk summary.
+INSERT INTO template_sections (inspection_type, vessel_type, code, title, sort_order) VALUES
+('PRE_PURCHASE', NULL, 'VESSEL_HISTORY',            'Vessel History & Ownership',                    65),
+('PRE_PURCHASE', NULL, 'CLASS_SURVEY_STATUS',        'Class, Certificate & Survey Status',            66),
+('PRE_PURCHASE', NULL, 'DOC_REVIEW_PP',              'Document & Survey History Review',              67),
+('PRE_PURCHASE', NULL, 'VESSEL_PERFORMANCE',         'Vessel Performance Review',                     68),
+('PRE_PURCHASE', NULL, 'SPACES_INSPECTED',           'Spaces Available for Inspection',               69),
+('PRE_PURCHASE', NULL, 'CARGO_MACHINERY_PARTICULARS','Cargo & Machinery Particulars Verification',    70),
+('PRE_PURCHASE', NULL, 'DEFICIENCY_REGISTER',        'Deficiencies & Observations Summary',           71);
+
+INSERT INTO template_questions (section_id, prompt, answer_kind, sort_order)
+SELECT id, q.prompt, q.kind::answer_kind, q.ord FROM template_sections s
+JOIN (VALUES
+ ('VESSEL_HISTORY','Summary of previous names, owners, class societies and flags','TEXT',1),
+ ('VESSEL_HISTORY','Number of previous owners','NUMBER',2),
+ ('VESSEL_HISTORY','Current trading pattern / typical trade routes','TEXT',3),
+ ('VESSEL_HISTORY','Historical trading pattern (as evidenced by port call / voyage records)','TEXT',4),
+ ('VESSEL_HISTORY','Has the vessel had any period of lay-up?','YES_NO',5),
+ ('CLASS_SURVEY_STATUS','Are all class and statutory certificates currently valid?','YES_NO',1),
+ ('CLASS_SURVEY_STATUS','Special Survey — last completion date','DATE',2),
+ ('CLASS_SURVEY_STATUS','Special Survey — next due date','DATE',3),
+ ('CLASS_SURVEY_STATUS','Intermediate Survey — due date','DATE',4),
+ ('CLASS_SURVEY_STATUS','Docking Survey — due date','DATE',5),
+ ('CLASS_SURVEY_STATUS','Are there any outstanding Conditions of Class?','YES_NO',6),
+ ('CLASS_SURVEY_STATUS','Details of any outstanding Conditions of Class','TEXT',7),
+ ('CLASS_SURVEY_STATUS','Are there any outstanding Memos to Owners / Class General Memos?','YES_NO',8),
+ ('CLASS_SURVEY_STATUS','Are there any overdue items under the Continuous Survey Machinery (CSM) cycle?','YES_NO',9),
+ ('CLASS_SURVEY_STATUS','Details of any overdue CSM items','TEXT',10),
+ ('DOC_REVIEW_PP','Last dry dock — shipyard name and location','TEXT',1),
+ ('DOC_REVIEW_PP','Last dry dock — period (start date, end date, total days)','TEXT',2),
+ ('DOC_REVIEW_PP','Was the hull coating renewed or repaired at the last dry dock?','YES_NO',3),
+ ('DOC_REVIEW_PP','Was the anchor chain calibrated / end-for-ended at the last dry dock?','YES_NO',4),
+ ('DOC_REVIEW_PP','Are UTM (thickness gauging) reports available and within acceptable limits?','YES_NO',5),
+ ('DOC_REVIEW_PP','Date of last UTM gauging survey','DATE',6),
+ ('DOC_REVIEW_PP','Is a Hull Executive Summary available for review?','YES_NO',7),
+ ('DOC_REVIEW_PP','Have there been any major modifications or conversions since build?','YES_NO',8),
+ ('DOC_REVIEW_PP','Details of any major modifications','TEXT',9),
+ ('DOC_REVIEW_PP','Number of PSC deficiencies recorded in the last 12 months','NUMBER',10),
+ ('DOC_REVIEW_PP','Any Port State Control detentions in the vessel''s history?','YES_NO',11),
+ ('DOC_REVIEW_PP','Is the vessel''s vetting (SIRE/CDI) inspection status satisfactory?','YES_NO',12),
+ ('VESSEL_PERFORMANCE','Average main engine fuel consumption at sea, laden (MT/day)','NUMBER',1),
+ ('VESSEL_PERFORMANCE','Average main engine fuel consumption at sea, ballast (MT/day)','NUMBER',2),
+ ('VESSEL_PERFORMANCE','Average auxiliary engine fuel consumption in port (MT/day)','NUMBER',3),
+ ('VESSEL_PERFORMANCE','Average lubricating oil consumption (litres/day)','NUMBER',4),
+ ('VESSEL_PERFORMANCE','Average fresh water consumption (MT/day)','NUMBER',5),
+ ('VESSEL_PERFORMANCE','Is abstract / log-book performance consistent with class speed & consumption warranties?','YES_NO',6),
+ ('SPACES_INSPECTED','Cargo holds/tanks available for inspection?','YES_NO',1),
+ ('SPACES_INSPECTED','Water ballast tanks available for inspection?','YES_NO',2),
+ ('SPACES_INSPECTED','Pipe ducts / cofferdams available for inspection?','YES_NO',3),
+ ('SPACES_INSPECTED','Freshwater tanks available for inspection?','YES_NO',4),
+ ('SPACES_INSPECTED','Void spaces available for inspection?','YES_NO',5),
+ ('SPACES_INSPECTED','Fuel oil / lube oil tanks available for inspection?','YES_NO',6),
+ ('SPACES_INSPECTED','Reason(s) any spaces were not made available','TEXT',7),
+ ('SPACES_INSPECTED','Overall quality of documents provided for review','GRADE',8),
+ ('CARGO_MACHINERY_PARTICULARS','Does total cargo/tank capacity match the vessel''s documents?','YES_NO',1),
+ ('CARGO_MACHINERY_PARTICULARS','Does the number of cargo segregations/tanks match the particulars?','YES_NO',2),
+ ('CARGO_MACHINERY_PARTICULARS','Is cargo handling equipment (pumps/cranes) type and capacity confirmed on board?','YES_NO',3),
+ ('CARGO_MACHINERY_PARTICULARS','Are main engine particulars (maker/model/power) confirmed against certificates?','YES_NO',4),
+ ('CARGO_MACHINERY_PARTICULARS','Are auxiliary engine particulars confirmed against certificates?','YES_NO',5),
+ ('CARGO_MACHINERY_PARTICULARS','Are emergency generator particulars confirmed against certificates?','YES_NO',6),
+ ('DEFICIENCY_REGISTER','Total number of deficiencies recorded','NUMBER',1),
+ ('DEFICIENCY_REGISTER','Number of High-risk deficiencies','NUMBER',2),
+ ('DEFICIENCY_REGISTER','Number of Medium-risk deficiencies','NUMBER',3),
+ ('DEFICIENCY_REGISTER','Number of Low-risk deficiencies','NUMBER',4),
+ ('DEFICIENCY_REGISTER','Summary of key deficiencies / observations','TEXT',5)
+) AS q(code, prompt, kind, ord)
+ON s.code = q.code AND s.inspection_type = 'PRE_PURCHASE' AND s.vessel_type IS NULL;

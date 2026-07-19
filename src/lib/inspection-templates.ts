@@ -472,6 +472,127 @@ export function getConditionSections(vesselType: VesselType): Section[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// PRE-PURCHASE — ADDITIONAL SECTIONS (beyond the Condition scope)
+// A pre-purchase inspection reviews everything a condition inspection
+// does, plus vessel history, class/survey status, document review,
+// performance, space access and a deficiency-risk summary — reflecting
+// the deeper due-diligence scope of a pre-purchase survey.
+// ─────────────────────────────────────────────────────────────────────
+const prePurchaseOnly: Section[] = [
+  {
+    code: "VESSEL_HISTORY",
+    title: "Vessel History & Ownership",
+    vesselType: null,
+    questions: [
+      { id:"vh01", prompt:"Summary of previous names, owners, class societies and flags", answerKind:"TEXT" },
+      { id:"vh02", prompt:"Number of previous owners", answerKind:"NUMBER" },
+      { id:"vh03", prompt:"Current trading pattern / typical trade routes", answerKind:"TEXT" },
+      { id:"vh04", prompt:"Historical trading pattern (as evidenced by port call / voyage records)", answerKind:"TEXT" },
+      { id:"vh05", prompt:"Has the vessel had any period of lay-up?", answerKind:"YES_NO" },
+    ],
+  },
+  {
+    code: "CLASS_SURVEY_STATUS",
+    title: "Class, Certificate & Survey Status",
+    vesselType: null,
+    questions: [
+      { id:"cs01", prompt:"Are all class and statutory certificates currently valid?", answerKind:"YES_NO" },
+      { id:"cs02", prompt:"Special Survey — last completion date", answerKind:"DATE" },
+      { id:"cs03", prompt:"Special Survey — next due date", answerKind:"DATE" },
+      { id:"cs04", prompt:"Intermediate Survey — due date", answerKind:"DATE" },
+      { id:"cs05", prompt:"Docking Survey — due date", answerKind:"DATE" },
+      { id:"cs06", prompt:"Are there any outstanding Conditions of Class?", answerKind:"YES_NO" },
+      { id:"cs07", prompt:"Details of any outstanding Conditions of Class", answerKind:"TEXT" },
+      { id:"cs08", prompt:"Are there any outstanding Memos to Owners / Class General Memos?", answerKind:"YES_NO" },
+      { id:"cs09", prompt:"Are there any overdue items under the Continuous Survey Machinery (CSM) cycle?", answerKind:"YES_NO" },
+      { id:"cs10", prompt:"Details of any overdue CSM items", answerKind:"TEXT" },
+    ],
+  },
+  {
+    code: "DOC_REVIEW_PP",
+    title: "Document & Survey History Review",
+    vesselType: null,
+    questions: [
+      { id:"dr01", prompt:"Last dry dock — shipyard name and location", answerKind:"TEXT" },
+      { id:"dr02", prompt:"Last dry dock — period (start date, end date, total days)", answerKind:"TEXT" },
+      { id:"dr03", prompt:"Was the hull coating renewed or repaired at the last dry dock?", answerKind:"YES_NO" },
+      { id:"dr04", prompt:"Was the anchor chain calibrated / end-for-ended at the last dry dock?", answerKind:"YES_NO" },
+      { id:"dr05", prompt:"Are UTM (thickness gauging) reports available and within acceptable limits?", answerKind:"YES_NO" },
+      { id:"dr06", prompt:"Date of last UTM gauging survey", answerKind:"DATE" },
+      { id:"dr07", prompt:"Is a Hull Executive Summary available for review?", answerKind:"YES_NO" },
+      { id:"dr08", prompt:"Have there been any major modifications or conversions since build?", answerKind:"YES_NO" },
+      { id:"dr09", prompt:"Details of any major modifications", answerKind:"TEXT" },
+      { id:"dr10", prompt:"Number of PSC deficiencies recorded in the last 12 months", answerKind:"NUMBER" },
+      { id:"dr11", prompt:"Any Port State Control detentions in the vessel's history?", answerKind:"YES_NO" },
+      { id:"dr12", prompt:"Is the vessel's vetting (SIRE/CDI) inspection status satisfactory?", answerKind:"YES_NO" },
+    ],
+  },
+  {
+    code: "VESSEL_PERFORMANCE",
+    title: "Vessel Performance Review",
+    vesselType: null,
+    questions: [
+      { id:"vp01", prompt:"Average main engine fuel consumption at sea, laden (MT/day)", answerKind:"NUMBER" },
+      { id:"vp02", prompt:"Average main engine fuel consumption at sea, ballast (MT/day)", answerKind:"NUMBER" },
+      { id:"vp03", prompt:"Average auxiliary engine fuel consumption in port (MT/day)", answerKind:"NUMBER" },
+      { id:"vp04", prompt:"Average lubricating oil consumption (litres/day)", answerKind:"NUMBER" },
+      { id:"vp05", prompt:"Average fresh water consumption (MT/day)", answerKind:"NUMBER" },
+      { id:"vp06", prompt:"Is abstract / log-book performance consistent with class speed & consumption warranties?", answerKind:"YES_NO" },
+    ],
+  },
+  {
+    code: "SPACES_INSPECTED",
+    title: "Spaces Available for Inspection",
+    vesselType: null,
+    questions: [
+      { id:"sp01", prompt:"Cargo holds/tanks available for inspection?", answerKind:"YES_NO" },
+      { id:"sp02", prompt:"Water ballast tanks available for inspection?", answerKind:"YES_NO" },
+      { id:"sp03", prompt:"Pipe ducts / cofferdams available for inspection?", answerKind:"YES_NO" },
+      { id:"sp04", prompt:"Freshwater tanks available for inspection?", answerKind:"YES_NO" },
+      { id:"sp05", prompt:"Void spaces available for inspection?", answerKind:"YES_NO" },
+      { id:"sp06", prompt:"Fuel oil / lube oil tanks available for inspection?", answerKind:"YES_NO" },
+      { id:"sp07", prompt:"Reason(s) any spaces were not made available", answerKind:"TEXT" },
+      { id:"sp08", prompt:"Overall quality of documents provided for review", answerKind:"GRADE" },
+    ],
+  },
+  {
+    code: "CARGO_MACHINERY_PARTICULARS",
+    title: "Cargo & Machinery Particulars Verification",
+    vesselType: null,
+    questions: [
+      { id:"cm01", prompt:"Does total cargo/tank capacity match the vessel's documents?", answerKind:"YES_NO" },
+      { id:"cm02", prompt:"Does the number of cargo segregations/tanks match the particulars?", answerKind:"YES_NO" },
+      { id:"cm03", prompt:"Is cargo handling equipment (pumps/cranes) type and capacity confirmed on board?", answerKind:"YES_NO" },
+      { id:"cm04", prompt:"Are main engine particulars (maker/model/power) confirmed against certificates?", answerKind:"YES_NO" },
+      { id:"cm05", prompt:"Are auxiliary engine particulars confirmed against certificates?", answerKind:"YES_NO" },
+      { id:"cm06", prompt:"Are emergency generator particulars confirmed against certificates?", answerKind:"YES_NO" },
+    ],
+  },
+  {
+    code: "DEFICIENCY_REGISTER",
+    title: "Deficiencies & Observations Summary",
+    vesselType: null,
+    questions: [
+      { id:"df01", prompt:"Total number of deficiencies recorded", answerKind:"NUMBER" },
+      { id:"df02", prompt:"Number of High-risk deficiencies", answerKind:"NUMBER" },
+      { id:"df03", prompt:"Number of Medium-risk deficiencies", answerKind:"NUMBER" },
+      { id:"df04", prompt:"Number of Low-risk deficiencies", answerKind:"NUMBER" },
+      { id:"df05", prompt:"Summary of key deficiencies / observations", answerKind:"TEXT" },
+    ],
+  },
+];
+
+/**
+ * Full Pre-Purchase question set = Condition scope (same structural/
+ * safety/machinery grading) + the additional pre-purchase-only sections
+ * above. The equipment inventory & CapEx table is layered on top of this
+ * in the UI, not part of the question sections.
+ */
+export function getPrePurchaseSections(vesselType: VesselType): Section[] {
+  return [...getConditionSections(vesselType), ...prePurchaseOnly];
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // PRE-PURCHASE EQUIPMENT INVENTORY
 // ─────────────────────────────────────────────────────────────────────
 const baseInventory = (sectionCode: string, names: string[]): EquipmentItem[] =>
