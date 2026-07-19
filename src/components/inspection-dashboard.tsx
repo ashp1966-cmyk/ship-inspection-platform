@@ -62,7 +62,9 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
   const [saved, setSaved]         = useState(false);
   const [saveError, setSaveError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadingFor, setUploadingFor] = useState<{qId:string, type:"photo"|"document"}|null>(null);
+  const [uploadingFor, setUploadingFor] = useState<{qId:string, type:"photo"|"document", question?:Question}|null>(null);
+  const [gradeSuggestions, setGradeSuggestions] = useState<Record<string, {grade:string; reasoning:string}>>({});
+  const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set());
 
   const conditionSections = useMemo(() => {
     const base = getConditionSections(vesselType);
@@ -127,9 +129,29 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
     setInventory(prev => prev.map(it => it.id===id?{...it,...patch}:it));
   }
 
+  async function analyzePhoto(qId: string, question: Question, imageUrl: string) {
+    if (question.answerKind !== "GRADE") return;
+    setAnalyzingIds(prev => new Set(prev).add(qId));
+    try {
+      const res = await fetch("/api/grade-photo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl, prompt: question.prompt }),
+      });
+      const data = await res.json();
+      if (res.ok && data.grade) {
+        setGradeSuggestions(prev => ({ ...prev, [qId]: { grade: data.grade, reasoning: data.reasoning ?? "" } }));
+      }
+    } catch {
+      // Silently skip — AI grading is a convenience, not a required step.
+    } finally {
+      setAnalyzingIds(prev => { const n = new Set(prev); n.delete(qId); return n; });
+    }
+  }
+
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     if (!uploadingFor || !e.target.files?.length) return;
-    const { qId, type } = uploadingFor;
+    const { qId, type, question } = uploadingFor;
     const file = e.target.files[0];
     const tempAtt: Attachment = { name:file.name, url:"", fileType:type, size:file.size, uploading:true };
     setAttachments(prev => ({ ...prev, [qId]:[...(prev[qId]??[]),tempAtt] }));
@@ -144,16 +166,31 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
           ...prev,
           [qId]: (prev[qId]??[]).map(a => a===tempAtt ? {...a, url, uploading:false} : a),
         }));
+        if (type === "photo" && question?.answerKind === "GRADE") {
+          analyzePhoto(qId, question, url);
+        }
+      } else {
+        let message = `Upload failed (${res.status})`;
+        try { const body = await res.json(); if (body?.error) message += `: ${body.error}`; } catch {}
+        console.error(message);
+        setAttachments(prev => ({
+          ...prev,
+          [qId]: (prev[qId]??[]).map(a => a===tempAtt ? {...a, uploading:false, name:`⚠ ${message}`} : a),
+        }));
       }
-    } catch {
-      setAttachments(prev => ({ ...prev, [qId]:(prev[qId]??[]).filter(a=>a!==tempAtt) }));
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      setAttachments(prev => ({
+        ...prev,
+        [qId]: (prev[qId]??[]).map(a => a===tempAtt ? {...a, uploading:false, name:"⚠ Upload failed — network error"} : a),
+      }));
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
     setUploadingFor(null);
   }
 
-  function triggerUpload(qId: string, type: "photo"|"document") {
-    setUploadingFor({ qId, type });
+  function triggerUpload(qId: string, type: "photo"|"document", question?: Question) {
+    setUploadingFor({ qId, type, question });
     setTimeout(() => fileInputRef.current?.click(), 50);
   }
 
@@ -193,6 +230,8 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
     const qAttachments = attachments[q.id] ?? [];
     const qRemarks     = remarks[q.id] ?? "";
     const hasContent   = qRemarks || qAttachments.length > 0;
+    const isAnalyzing  = analyzingIds.has(q.id);
+    const suggestion   = gradeSuggestions[q.id];
 
     return (
       <div key={q.id} className={q.custom ? "bg-blue-50/30" : ""} style={{ borderBottom:"1px solid #F3F4F6" }}>
@@ -205,9 +244,9 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
                 onKeyDown={e=>e.key==="Enter"&&saveEdit(sectionCode,q.id)}
                 className="text-sm h-8 w-full border rounded px-2" autoFocus />
             ) : (
-              <span style={{ fontSize:13, lineHeight:1.5, color:"#374151" }}>
+              <span style={{ fontSize:15, lineHeight:1.5, color:"#374151" }}>
                 {q.prompt}
-                {q.custom && <span style={{ marginLeft:6, fontSize:10, color:"#3B82F6", fontWeight:500 }}>CUSTOM</span>}
+                {q.custom && <span style={{ marginLeft:6, fontSize:12, color:"#3B82F6", fontWeight:500 }}>CUSTOM</span>}
               </span>
             )}
           </div>
@@ -217,13 +256,13 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
             <div style={{ display:"flex", gap:2, flexShrink:0 }}>
               {isEditing ? (
                 <>
-                  <button onClick={()=>saveEdit(sectionCode,q.id)} style={{ fontSize:11, color:"#059669", padding:"2px 6px", border:"none", background:"none", cursor:"pointer", fontWeight:500 }}>Save</button>
-                  <button onClick={()=>setEditingId(null)} style={{ fontSize:11, color:"#9CA3AF", padding:"2px 4px", border:"none", background:"none", cursor:"pointer" }}>Cancel</button>
+                  <button onClick={()=>saveEdit(sectionCode,q.id)} style={{ fontSize:13, color:"#059669", padding:"2px 6px", border:"none", background:"none", cursor:"pointer", fontWeight:500 }}>Save</button>
+                  <button onClick={()=>setEditingId(null)} style={{ fontSize:13, color:"#9CA3AF", padding:"2px 4px", border:"none", background:"none", cursor:"pointer" }}>Cancel</button>
                 </>
               ) : (
                 <>
-                  <button onClick={()=>{setEditingId(q.id);setEditPrompt(q.prompt);}} style={{ fontSize:12, color:"#9CA3AF", padding:"2px 4px", border:"none", background:"none", cursor:"pointer" }}>✏️</button>
-                  <button onClick={()=>deleteCustomQuestion(sectionCode,q.id)} style={{ fontSize:12, color:"#9CA3AF", padding:"2px 4px", border:"none", background:"none", cursor:"pointer" }}>✕</button>
+                  <button onClick={()=>{setEditingId(q.id);setEditPrompt(q.prompt);}} style={{ fontSize:14, color:"#9CA3AF", padding:"2px 4px", border:"none", background:"none", cursor:"pointer" }}>✏️</button>
+                  <button onClick={()=>deleteCustomQuestion(sectionCode,q.id)} style={{ fontSize:14, color:"#9CA3AF", padding:"2px 4px", border:"none", background:"none", cursor:"pointer" }}>✕</button>
                 </>
               )}
             </div>
@@ -253,13 +292,48 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
 
           {/* Expand notes/attach toggle */}
           <button onClick={()=>toggleExpanded(q.id)} title="Add remarks or attach files"
-            style={{ flexShrink:0, padding:"3px 6px", border:"1px solid", borderRadius:5, fontSize:11, cursor:"pointer",
+            style={{ flexShrink:0, padding:"3px 6px", border:"1px solid", borderRadius:5, fontSize:13, cursor:"pointer",
               borderColor: hasContent||isExpanded ? TEAL : "#D1D5DB",
               background: hasContent||isExpanded ? "#E0F9FF" : "#fff",
               color: hasContent||isExpanded ? "#0369A1" : "#9CA3AF" }}>
             📎 {qAttachments.length>0 ? qAttachments.length : ""}
           </button>
         </div>
+
+        {/* AI grading suggestion — only for GRADE questions with a photo just analyzed */}
+        {q.answerKind==="GRADE" && (isAnalyzing || suggestion) && (
+          <div style={{ padding:"0 0 8px 0", display:"flex", alignItems:"center", gap:8 }}>
+            {isAnalyzing ? (
+              <span style={{ fontSize:13, color:"#9CA3AF", display:"flex", alignItems:"center", gap:4 }}>
+                🔍 Analyzing photo…
+              </span>
+            ) : suggestion && (
+              <div style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 10px", background:"#EEF2FF", borderRadius:6, border:"1px solid #C7D2FE" }}>
+                <span style={{ fontSize:13, color:"#4338CA", fontWeight:500 }} title={suggestion.reasoning}>
+                  🤖 AI suggests: {GRADES.find(g=>g.value===suggestion.grade)?.label ?? suggestion.grade}
+                </span>
+                {suggestion.reasoning && (
+                  <span style={{ fontSize:13, color:"#6B7280", maxWidth:360, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                    — {suggestion.reasoning}
+                  </span>
+                )}
+                <button
+                  onClick={()=>{
+                    setAnswers(a=>({...a,[q.id]:suggestion.grade}));
+                    setGradeSuggestions(prev=>{ const n={...prev}; delete n[q.id]; return n; });
+                  }}
+                  style={{ fontSize:13, color:"#4338CA", fontWeight:600, border:"none", background:"none", cursor:"pointer", padding:"2px 4px" }}>
+                  Apply
+                </button>
+                <button
+                  onClick={()=>setGradeSuggestions(prev=>{ const n={...prev}; delete n[q.id]; return n; })}
+                  style={{ fontSize:13, color:"#9CA3AF", border:"none", background:"none", cursor:"pointer", padding:"2px 4px" }}>
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Expanded remarks + attachments panel */}
         {isExpanded && (
@@ -268,23 +342,25 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
             <textarea value={qRemarks} onChange={e=>setRemarks(r=>({...r,[q.id]:e.target.value}))}
               placeholder="Remarks / observations for this item…"
               rows={2} style={{ width:"100%", padding:"6px 10px", border:"1px solid #D1D5DB", borderRadius:6,
-                fontSize:12, resize:"vertical", fontFamily:"inherit", marginBottom:8 }} />
+                fontSize:14, resize:"vertical", fontFamily:"inherit", marginBottom:8 }} />
 
             {/* Upload buttons */}
             <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
-              <button onClick={()=>triggerUpload(q.id,"photo")} style={{ padding:"4px 12px", border:"1px solid #D1D5DB", borderRadius:5, fontSize:12, cursor:"pointer", background:"#fff", display:"flex", alignItems:"center", gap:4 }}>
+              <button onClick={()=>triggerUpload(q.id,"photo",q)} style={{ padding:"4px 12px", border:"1px solid #D1D5DB", borderRadius:5, fontSize:14, cursor:"pointer", background:"#fff", display:"flex", alignItems:"center", gap:4 }}>
                 📷 Add photo
               </button>
-              <button onClick={()=>triggerUpload(q.id,"document")} style={{ padding:"4px 12px", border:"1px solid #D1D5DB", borderRadius:5, fontSize:12, cursor:"pointer", background:"#fff", display:"flex", alignItems:"center", gap:4 }}>
+              <button onClick={()=>triggerUpload(q.id,"document")} style={{ padding:"4px 12px", border:"1px solid #D1D5DB", borderRadius:5, fontSize:14, cursor:"pointer", background:"#fff", display:"flex", alignItems:"center", gap:4 }}>
                 📄 Add document
               </button>
 
               {/* Attached files */}
               {qAttachments.map((att,ai) => (
-                <div key={ai} style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 8px", background:"#F3F4F6", borderRadius:5, fontSize:11 }}>
+                <div key={ai} style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 8px", background:"#F3F4F6", borderRadius:5, fontSize:13 }}>
                   {att.uploading ? (
                     <span style={{ color:"#9CA3AF" }}>Uploading…</span>
-                  ) : att.fileType==="photo" && att.url ? (
+                  ) : !att.url ? (
+                    <span style={{ color:"#DC2626" }}>{att.name}</span>
+                  ) : att.fileType==="photo" ? (
                     <a href={att.url} target="_blank" rel="noreferrer">
                       <img src={att.url} alt={att.name} style={{ width:28, height:28, objectFit:"cover", borderRadius:3 }} />
                     </a>
@@ -294,7 +370,7 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
                     </a>
                   )}
                   <button onClick={()=>setAttachments(prev=>({...prev,[q.id]:(prev[q.id]??[]).filter((_,i)=>i!==ai)}))}
-                    style={{ color:"#9CA3AF", border:"none", background:"none", cursor:"pointer", fontSize:12, padding:"0 2px" }}>✕</button>
+                    style={{ color:"#9CA3AF", border:"none", background:"none", cursor:"pointer", fontSize:14, padding:"0 2px" }}>✕</button>
                 </div>
               ))}
             </div>
@@ -413,7 +489,7 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
         <div className="flex gap-3 flex-wrap">
           {/* Vessel selector */}
           <select value={selectedVessel} onChange={e=>setSelectedVessel(e.target.value)}
-            style={{ padding:"7px 12px", border:"1px solid #D1D5DB", borderRadius:7, fontSize:13, minWidth:180 }}>
+            style={{ padding:"7px 12px", border:"1px solid #D1D5DB", borderRadius:7, fontSize:15, minWidth:180 }}>
             <option value="">Select vessel (optional)</option>
             {vessels.map(v=><option key={v.id} value={v.id}>{v.name} — {v.imo_number}</option>)}
           </select>

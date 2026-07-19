@@ -79,15 +79,15 @@ export default function VesselsList({ vessels: initial }: { vessels: Vessel[] })
 
   const F = (label: string, key: string, type = "text", opts?: string[]) => (
     <div style={{ marginBottom:10 }}>
-      <label style={{ fontSize:11, fontWeight:500, color:"#6B7280", textTransform:"uppercase", letterSpacing:"0.05em", display:"block", marginBottom:3 }}>{label}</label>
+      <label style={{ fontSize:13, fontWeight:500, color:"#6B7280", textTransform:"uppercase", letterSpacing:"0.05em", display:"block", marginBottom:3 }}>{label}</label>
       {opts ? (
         <select value={(form as any)[key]} onChange={e => setForm(f => ({...f,[key]:e.target.value}))}
-          style={{ width:"100%", padding:"7px 10px", border:"1px solid #D1D5DB", borderRadius:6, fontSize:13 }}>
+          style={{ width:"100%", padding:"7px 10px", border:"1px solid #D1D5DB", borderRadius:6, fontSize:15 }}>
           {opts.map(o => <option key={o} value={o}>{VESSEL_TYPES[o]??o}</option>)}
         </select>
       ) : (
         <input type={type} value={(form as any)[key]} onChange={e => setForm(f => ({...f,[key]:e.target.value}))}
-          style={{ width:"100%", padding:"7px 10px", border:"1px solid #D1D5DB", borderRadius:6, fontSize:13 }} />
+          style={{ width:"100%", padding:"7px 10px", border:"1px solid #D1D5DB", borderRadius:6, fontSize:15 }} />
       )}
     </div>
   );
@@ -98,30 +98,30 @@ export default function VesselsList({ vessels: initial }: { vessels: Vessel[] })
         {/* Header */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"1.25rem" }}>
           <div>
-            <h1 style={{ fontSize:20, fontWeight:600, color:"#1A2533", margin:0 }}>Fleet Registry</h1>
-            <p style={{ fontSize:12, color:"#6B7280", marginTop:2 }}>{vessels.length} vessel{vessels.length!==1?"s":""} registered</p>
+            <h1 style={{ fontSize:23, fontWeight:600, color:"#1A2533", margin:0 }}>Fleet Registry</h1>
+            <p style={{ fontSize:14, color:"#6B7280", marginTop:2 }}>{vessels.length} vessel{vessels.length!==1?"s":""} registered</p>
           </div>
-          <button onClick={openAdd} style={{ background:NAV, color:"#fff", padding:"8px 18px", borderRadius:7, fontSize:13, fontWeight:500, border:"none", cursor:"pointer" }}>
+          <button onClick={openAdd} style={{ background:NAV, color:"#fff", padding:"8px 18px", borderRadius:7, fontSize:15, fontWeight:500, border:"none", cursor:"pointer" }}>
             + Add Vessel
           </button>
         </div>
 
         {/* Search */}
         <input placeholder="Search by name, IMO or type…" value={search} onChange={e => setSearch(e.target.value)}
-          style={{ width:"100%", padding:"9px 14px", border:"1px solid #D1D5DB", borderRadius:8, fontSize:13, marginBottom:"1rem", background:"#fff" }} />
+          style={{ width:"100%", padding:"9px 14px", border:"1px solid #D1D5DB", borderRadius:8, fontSize:15, marginBottom:"1rem", background:"#fff" }} />
 
         {/* Table */}
         <div style={{ background:"#fff", borderRadius:10, border:"1px solid #E5E7EB", overflow:"hidden" }}>
           {filtered.length === 0 ? (
-            <div style={{ padding:"3rem", textAlign:"center", color:"#9CA3AF", fontSize:13 }}>
+            <div style={{ padding:"3rem", textAlign:"center", color:"#9CA3AF", fontSize:15 }}>
               {search ? "No vessels match your search." : "No vessels yet — add your first vessel above."}
             </div>
           ) : (
-            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:15 }}>
               <thead>
                 <tr style={{ background:"#F9FAFB" }}>
                   {["Vessel Name","IMO","Type","Flag","Class","DWT","Dry Dock Due","Owners","Actions"].map(h => (
-                    <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontWeight:500, color:"#6B7280", fontSize:11, textTransform:"uppercase", letterSpacing:"0.04em", whiteSpace:"nowrap" }}>{h}</th>
+                    <th key={h} style={{ padding:"9px 12px", textAlign:"left", fontWeight:500, color:"#6B7280", fontSize:13, textTransform:"uppercase", letterSpacing:"0.04em", whiteSpace:"nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -131,7 +131,7 @@ export default function VesselsList({ vessels: initial }: { vessels: Vessel[] })
                     <td style={{ padding:"9px 12px", fontWeight:600, color:"#1A2533" }}>{v.name}</td>
                     <td style={{ padding:"9px 12px", color:"#6B7280", fontFamily:"monospace" }}>{v.imo_number}</td>
                     <td style={{ padding:"9px 12px" }}>
-                      <span style={{ padding:"2px 8px", borderRadius:20, fontSize:11, background:"#E0F2FE", color:"#0369A1", fontWeight:500 }}>
+                      <span style={{ padding:"2px 8px", borderRadius:20, fontSize:13, background:"#E0F2FE", color:"#0369A1", fontWeight:500 }}>
                         {VESSEL_TYPES[v.vessel_type] ?? v.vessel_type}
                       </span>
                     </td>
@@ -143,9 +143,9 @@ export default function VesselsList({ vessels: initial }: { vessels: Vessel[] })
                     </td>
                     <td style={{ padding:"9px 12px", color:"#6B7280", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{v.owners ?? "—"}</td>
                     <td style={{ padding:"9px 12px", whiteSpace:"nowrap" }}>
-                      <button onClick={() => openEdit(v)} style={{ padding:"3px 10px", background:"#F3F4F6", border:"none", borderRadius:5, fontSize:12, cursor:"pointer", marginRight:6 }}>Edit</button>
-                      <Link href={`/inspections/new?vessel=${v.id}`} style={{ padding:"3px 10px", background:TEAL, color:"#fff", borderRadius:5, fontSize:12, textDecoration:"none" }}>Inspect</Link>
-                      <button onClick={() => deleteVessel(v.id)} style={{ padding:"3px 8px", background:"#FEE2E2", color:"#DC2626", border:"none", borderRadius:5, fontSize:12, cursor:"pointer", marginLeft:6 }}>✕</button>
+                      <button onClick={() => openEdit(v)} style={{ padding:"3px 10px", background:"#F3F4F6", border:"none", borderRadius:5, fontSize:14, cursor:"pointer", marginRight:6 }}>Edit</button>
+                      <Link href={`/inspections/new?vessel=${v.id}`} style={{ padding:"3px 10px", background:TEAL, color:"#fff", borderRadius:5, fontSize:14, textDecoration:"none" }}>Inspect</Link>
+                      <button onClick={() => deleteVessel(v.id)} style={{ padding:"3px 8px", background:"#FEE2E2", color:"#DC2626", border:"none", borderRadius:5, fontSize:14, cursor:"pointer", marginLeft:6 }}>✕</button>
                     </td>
                   </tr>
                 ))}
@@ -159,7 +159,7 @@ export default function VesselsList({ vessels: initial }: { vessels: Vessel[] })
       {showForm && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:50, padding:"1rem" }}>
           <div style={{ background:"#fff", borderRadius:12, width:"100%", maxWidth:640, maxHeight:"90vh", overflow:"auto", padding:"1.5rem" }}>
-            <h2 style={{ fontSize:16, fontWeight:600, color:"#1A2533", marginBottom:"1.25rem" }}>
+            <h2 style={{ fontSize:18, fontWeight:600, color:"#1A2533", marginBottom:"1.25rem" }}>
               {editing ? "Edit Vessel" : "Add New Vessel"}
             </h2>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 1rem" }}>
@@ -181,8 +181,8 @@ export default function VesselsList({ vessels: initial }: { vessels: Vessel[] })
               {F("Dry Dock Due", "dry_dock_due", "date")}
             </div>
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:"1rem" }}>
-              <button onClick={() => setShowForm(false)} style={{ padding:"8px 18px", background:"#F3F4F6", border:"none", borderRadius:7, fontSize:13, cursor:"pointer" }}>Cancel</button>
-              <button onClick={saveVessel} disabled={saving} style={{ padding:"8px 20px", background:NAV, color:"#fff", border:"none", borderRadius:7, fontSize:13, fontWeight:500, cursor:"pointer" }}>
+              <button onClick={() => setShowForm(false)} style={{ padding:"8px 18px", background:"#F3F4F6", border:"none", borderRadius:7, fontSize:15, cursor:"pointer" }}>Cancel</button>
+              <button onClick={saveVessel} disabled={saving} style={{ padding:"8px 20px", background:NAV, color:"#fff", border:"none", borderRadius:7, fontSize:15, fontWeight:500, cursor:"pointer" }}>
                 {saving ? "Saving…" : editing ? "Save Changes" : "Add Vessel"}
               </button>
             </div>

@@ -126,5 +126,10 @@
   }
   html {
     @apply font-sans;
+    /* Bump the root font-size so every Tailwind text-* utility (which is
+       defined in rem, relative to this) scales up uniformly across the
+       whole app — tables, cards, forms, nav, everything — without having
+       to touch each component individually. */
+    font-size: 120%;
   }
 }

@@ -13,6 +13,7 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ url: blob.url, name: filename });
   } catch (err: any) {
+    console.error("Blob upload failed:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

@@ -74,7 +74,7 @@ export default function LoginPage() {
           </div>
           <h1 style={{
             color: "#fff",
-            fontSize: 15,
+            fontSize: 17,
             fontWeight: 700,
             letterSpacing: "0.18em",
             textTransform: "uppercase",
@@ -83,7 +83,7 @@ export default function LoginPage() {
           }}>
             AUK Marine and Mining
           </h1>
-          <p style={{ color: "#4ABFDA", fontSize: 13, letterSpacing: "0.03em" }}>
+          <p style={{ color: "#4ABFDA", fontSize: 15, letterSpacing: "0.03em" }}>
             Ship Inspection Platform
           </p>
         </div>
@@ -97,7 +97,7 @@ export default function LoginPage() {
             <label style={{
               display: "block",
               color: "#6B9AB8",
-              fontSize: 11,
+              fontSize: 13,
               fontWeight: 600,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
@@ -119,7 +119,7 @@ export default function LoginPage() {
                 border: "1px solid rgba(255,255,255,0.12)",
                 borderRadius: 7,
                 color: "#fff",
-                fontSize: 14,
+                fontSize: 16,
                 outline: "none",
               }}
             />
@@ -130,14 +130,14 @@ export default function LoginPage() {
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
               <label style={{
                 color: "#6B9AB8",
-                fontSize: 11,
+                fontSize: 13,
                 fontWeight: 600,
                 letterSpacing: "0.1em",
                 textTransform: "uppercase",
               }}>
                 Password
               </label>
-              <span style={{ color: "#4ABFDA", fontSize: 12, cursor: "pointer" }}>
+              <span style={{ color: "#4ABFDA", fontSize: 14, cursor: "pointer" }}>
                 Forgot password?
               </span>
             </div>
@@ -156,7 +156,7 @@ export default function LoginPage() {
                   border: "1px solid rgba(255,255,255,0.12)",
                   borderRadius: 7,
                   color: "#fff",
-                  fontSize: 14,
+                  fontSize: 16,
                   outline: "none",
                 }}
               />
@@ -172,7 +172,7 @@ export default function LoginPage() {
                   border: "none",
                   color: "#6B9AB8",
                   cursor: "pointer",
-                  fontSize: 16,
+                  fontSize: 18,
                   padding: 0,
                 }}
                 aria-label={showPw ? "Hide password" : "Show password"}
@@ -181,10 +181,10 @@ export default function LoginPage() {
               </button>
             </div>
             {error && (
-              <p style={{ color: "#F87171", fontSize: 12, marginTop: 6 }}>{error}</p>
+              <p style={{ color: "#F87171", fontSize: 14, marginTop: 6 }}>{error}</p>
             )}
             {!error && (
-              <p style={{ color: "rgba(107,154,184,0.55)", fontSize: 11, marginTop: 6, textAlign: "right" }}>
+              <p style={{ color: "rgba(107,154,184,0.55)", fontSize: 13, marginTop: 6, textAlign: "right" }}>
                 Press Enter or click Sign In
               </p>
             )}
@@ -201,7 +201,7 @@ export default function LoginPage() {
               color: "#fff",
               border: "none",
               borderRadius: 7,
-              fontSize: 14,
+              fontSize: 16,
               fontWeight: 600,
               cursor: loading ? "not-allowed" : "pointer",
               letterSpacing: "0.04em",
@@ -215,7 +215,7 @@ export default function LoginPage() {
         {/* Footer */}
         <p style={{
           textAlign: "center",
-          fontSize: 11.5,
+          fontSize: 13.5,
           color: "rgba(107,154,184,0.6)",
         }}>
           🔒 Authorized personnel only — contact{" "}

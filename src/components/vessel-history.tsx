@@ -18,18 +18,18 @@ export default function VesselHistory({ vessel, inspections }: { vessel: any; in
         <div style={{ background:"#fff", borderRadius:10, border:"1px solid #E5E7EB", padding:"1.25rem", marginBottom:"1rem" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:"1rem" }}>
             <div>
-              <div style={{ fontSize:11, color:"#9CA3AF", textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:4 }}>Fleet Registry</div>
-              <h1 style={{ fontSize:22, fontWeight:700, color:"#1A2533", margin:0 }}>{vessel.name}</h1>
-              <div style={{ fontSize:13, color:"#6B7280", marginTop:4, display:"flex", gap:"1.5rem", flexWrap:"wrap" }}>
+              <div style={{ fontSize:13, color:"#9CA3AF", textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:4 }}>Fleet Registry</div>
+              <h1 style={{ fontSize:25, fontWeight:700, color:"#1A2533", margin:0 }}>{vessel.name}</h1>
+              <div style={{ fontSize:15, color:"#6B7280", marginTop:4, display:"flex", gap:"1.5rem", flexWrap:"wrap" }}>
                 <span>IMO <strong style={{color:"#374151"}}>{vessel.imo_number}</strong></span>
                 <span>Type <strong style={{color:"#374151"}}>{TYPES[vessel.vessel_type]??vessel.vessel_type}</strong></span>
                 <span>Flag <strong style={{color:"#374151"}}>{vessel.flag||"—"}</strong></span>
                 <span>Class <strong style={{color:"#374151"}}>{vessel.class_society||"—"}</strong></span>
                 <span>DWT <strong style={{color:"#374151"}}>{vessel.dwt?Number(vessel.dwt).toLocaleString():"—"}</strong></span>
               </div>
-              {vessel.owners && <div style={{ fontSize:12, color:"#9CA3AF", marginTop:4 }}>Owners: {vessel.owners}</div>}
+              {vessel.owners && <div style={{ fontSize:14, color:"#9CA3AF", marginTop:4 }}>Owners: {vessel.owners}</div>}
               {vessel.dry_dock_due && (
-                <div style={{ fontSize:12, marginTop:4, color: new Date(vessel.dry_dock_due)<new Date()?"#DC2626":"#6B7280" }}>
+                <div style={{ fontSize:14, marginTop:4, color: new Date(vessel.dry_dock_due)<new Date()?"#DC2626":"#6B7280" }}>
                   Dry dock due: {fmt(vessel.dry_dock_due)}
                   {new Date(vessel.dry_dock_due)<new Date() && <span style={{ marginLeft:6, fontWeight:600 }}>⚠ OVERDUE</span>}
                 </div>
@@ -38,11 +38,11 @@ export default function VesselHistory({ vessel, inspections }: { vessel: any; in
             <div style={{ display:"flex", gap:10 }}>
               {latestScore != null && (
                 <div style={{ textAlign:"center", background:"#F9FAFB", borderRadius:8, padding:"10px 16px" }}>
-                  <div style={{ fontSize:28, fontWeight:700, color: latestScore>=85?"#065F46":latestScore>=65?"#92400E":"#DC2626" }}>{latestScore}</div>
-                  <div style={{ fontSize:10, color:"#9CA3AF" }}>Latest score</div>
+                  <div style={{ fontSize:32, fontWeight:700, color: latestScore>=85?"#065F46":latestScore>=65?"#92400E":"#DC2626" }}>{latestScore}</div>
+                  <div style={{ fontSize:12, color:"#9CA3AF" }}>Latest score</div>
                 </div>
               )}
-              <Link href={`/inspections/new?vessel=${vessel.id}`} style={{ padding:"8px 16px", background:NAV, color:"#fff", borderRadius:7, fontSize:13, textDecoration:"none", display:"flex", alignItems:"center" }}>
+              <Link href={`/inspections/new?vessel=${vessel.id}`} style={{ padding:"8px 16px", background:NAV, color:"#fff", borderRadius:7, fontSize:15, textDecoration:"none", display:"flex", alignItems:"center" }}>
                 + New Inspection
               </Link>
             </div>
@@ -52,15 +52,15 @@ export default function VesselHistory({ vessel, inspections }: { vessel: any; in
         {/* Score trend */}
         {inspections.filter(i=>i.overall_score!=null).length > 1 && (
           <div style={{ background:"#fff", borderRadius:10, border:"1px solid #E5E7EB", padding:"1.25rem", marginBottom:"1rem" }}>
-            <h2 style={{ fontSize:13, fontWeight:600, color:"#1A2533", marginBottom:12 }}>Score History</h2>
+            <h2 style={{ fontSize:15, fontWeight:600, color:"#1A2533", marginBottom:12 }}>Score History</h2>
             <div style={{ display:"flex", alignItems:"flex-end", gap:8, height:80 }}>
               {inspections.filter(i=>i.overall_score!=null).reverse().map((insp,i)=>{
                 const grade=insp.overall_score>=85?"GOOD":insp.overall_score>=65?"FAIR":insp.overall_score>=40?"POOR":"ACTION_REQUIRED";
                 return (
                   <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-                    <div style={{ fontSize:11, fontWeight:600, color:GRADE_COLOR[grade] }}>{insp.overall_score}</div>
+                    <div style={{ fontSize:13, fontWeight:600, color:GRADE_COLOR[grade] }}>{insp.overall_score}</div>
                     <div style={{ width:"100%", background:GRADE_COLOR[grade], borderRadius:"3px 3px 0 0", height:`${insp.overall_score*0.7}px`, maxHeight:70 }} />
-                    <div style={{ fontSize:9, color:"#9CA3AF", whiteSpace:"nowrap" }}>{fmt(insp.started_at??insp.created_at)}</div>
+                    <div style={{ fontSize:11, color:"#9CA3AF", whiteSpace:"nowrap" }}>{fmt(insp.started_at??insp.created_at)}</div>
                   </div>
                 );
               })}
@@ -71,18 +71,18 @@ export default function VesselHistory({ vessel, inspections }: { vessel: any; in
         {/* Inspection history table */}
         <div style={{ background:"#fff", borderRadius:10, border:"1px solid #E5E7EB", overflow:"hidden" }}>
           <div style={{ padding:"10px 16px", background:"#F9FAFB", borderBottom:"1px solid #E5E7EB", display:"flex", justifyContent:"space-between" }}>
-            <h2 style={{ fontSize:13, fontWeight:600, margin:0 }}>Inspection History ({inspections.length})</h2>
+            <h2 style={{ fontSize:15, fontWeight:600, margin:0 }}>Inspection History ({inspections.length})</h2>
           </div>
           {inspections.length === 0 ? (
-            <div style={{ padding:"3rem", textAlign:"center", color:"#9CA3AF", fontSize:13 }}>
+            <div style={{ padding:"3rem", textAlign:"center", color:"#9CA3AF", fontSize:15 }}>
               No inspections yet. <Link href={`/inspections/new?vessel=${vessel.id}`} style={{ color:TEAL }}>Start the first inspection →</Link>
             </div>
           ) : (
-            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:15 }}>
               <thead>
                 <tr style={{ background:"#F9FAFB" }}>
                   {["Type","Date","Port","Inspector","Score","Deficiencies","Status",""].map(h=>(
-                    <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontWeight:500, color:"#6B7280", fontSize:11, textTransform:"uppercase", letterSpacing:"0.04em", whiteSpace:"nowrap" }}>{h}</th>
+                    <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontWeight:500, color:"#6B7280", fontSize:13, textTransform:"uppercase", letterSpacing:"0.04em", whiteSpace:"nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -90,7 +90,7 @@ export default function VesselHistory({ vessel, inspections }: { vessel: any; in
                 {inspections.map((insp,i)=>(
                   <tr key={insp.id} style={{ borderTop:"1px solid #F3F4F6", background:i%2===0?"#fff":"#FAFAFA" }}>
                     <td style={{ padding:"9px 12px" }}>
-                      <span style={{ padding:"2px 8px", borderRadius:20, fontSize:11, fontWeight:500, background:insp.inspection_type==="PRE_PURCHASE"?"#FEF3C7":"#E0F2FE", color:insp.inspection_type==="PRE_PURCHASE"?"#92400E":"#0369A1" }}>
+                      <span style={{ padding:"2px 8px", borderRadius:20, fontSize:13, fontWeight:500, background:insp.inspection_type==="PRE_PURCHASE"?"#FEF3C7":"#E0F2FE", color:insp.inspection_type==="PRE_PURCHASE"?"#92400E":"#0369A1" }}>
                         {insp.inspection_type==="PRE_PURCHASE"?"Pre-Purchase":"Condition"}
                       </span>
                     </td>
@@ -105,15 +105,15 @@ export default function VesselHistory({ vessel, inspections }: { vessel: any; in
                       ) : <span style={{ color:"#D1D5DB" }}>—</span>}
                     </td>
                     <td style={{ padding:"9px 12px", textAlign:"center" }}>
-                      {insp.deficiencies > 0 ? <span style={{ padding:"2px 8px", borderRadius:20, fontSize:11, fontWeight:600, background:"#FEE2E2", color:"#DC2626" }}>{insp.deficiencies}</span> : "0"}
+                      {insp.deficiencies > 0 ? <span style={{ padding:"2px 8px", borderRadius:20, fontSize:13, fontWeight:600, background:"#FEE2E2", color:"#DC2626" }}>{insp.deficiencies}</span> : "0"}
                     </td>
                     <td style={{ padding:"9px 12px" }}>
-                      <span style={{ padding:"2px 8px", borderRadius:20, fontSize:11, fontWeight:500, background:STATUS_BG[insp.status??"DRAFT"], color:STATUS_COLOR[insp.status??"DRAFT"] }}>
+                      <span style={{ padding:"2px 8px", borderRadius:20, fontSize:13, fontWeight:500, background:STATUS_BG[insp.status??"DRAFT"], color:STATUS_COLOR[insp.status??"DRAFT"] }}>
                         {(insp.status??"DRAFT").replace("_"," ")}
                       </span>
                     </td>
                     <td style={{ padding:"9px 12px", whiteSpace:"nowrap" }}>
-                      <Link href={`/inspections/${insp.id}`} style={{ padding:"3px 10px", background:TEAL, color:"#fff", borderRadius:5, fontSize:12, textDecoration:"none" }}>View →</Link>
+                      <Link href={`/inspections/${insp.id}`} style={{ padding:"3px 10px", background:TEAL, color:"#fff", borderRadius:5, fontSize:14, textDecoration:"none" }}>View →</Link>
                     </td>
                   </tr>
                 ))}

@@ -42,10 +42,10 @@ export default function AukHeader() {
           style={{ objectFit: "contain", display: "block", filter: "brightness(0) invert(1)" }}
         />
         <div style={{ borderLeft: "1px solid rgba(255,255,255,0.15)", paddingLeft: 12 }}>
-          <div style={{ color: "#fff", fontSize: 12, fontWeight: 600, letterSpacing: "0.04em" }}>
+          <div style={{ color: "#fff", fontSize: 14, fontWeight: 600, letterSpacing: "0.04em" }}>
             Ship Inspection Platform
           </div>
-          <div style={{ color: "#4ABFDA", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          <div style={{ color: "#4ABFDA", fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase" }}>
             AUK Marine and Mining
           </div>
         </div>
@@ -59,7 +59,7 @@ export default function AukHeader() {
             return (
               <Link key={item.href} href={item.href} style={{
                 color: active ? "#4ABFDA" : "rgba(255,255,255,0.65)",
-                fontSize: 13,
+                fontSize: 15,
                 textDecoration: "none",
                 fontWeight: active ? 500 : 400,
                 borderBottom: active ? "2px solid #4ABFDA" : "2px solid transparent",
@@ -76,7 +76,7 @@ export default function AukHeader() {
           border: "1px solid rgba(255,255,255,0.15)",
           borderRadius: 5,
           color: "rgba(255,255,255,0.75)",
-          fontSize: 12,
+          fontSize: 14,
           cursor: "pointer",
         }}>
           Sign out

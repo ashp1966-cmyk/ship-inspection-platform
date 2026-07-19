@@ -9,7 +9,7 @@ export default async function NewInspectionPage() {
   `;
   return (
     <div>
-      <div style={{ background:"#F4F2EE", borderBottom:"1px solid #E5E7EB", padding:"12px 24px", fontSize:12, color:"#6B7280" }}>
+      <div style={{ background:"#F4F2EE", borderBottom:"1px solid #E5E7EB", padding:"12px 24px", fontSize:14, color:"#6B7280" }}>
         <a href="/" style={{ color:"#1BA5C0", textDecoration:"none" }}>Dashboard</a>
         {" / New Inspection"}
       </div>
