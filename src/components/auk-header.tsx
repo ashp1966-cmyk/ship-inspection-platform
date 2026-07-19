@@ -17,6 +17,7 @@ export default function AukHeader() {
     { label: "Dashboard", href: "/" },
     { label: "Vessels",   href: "/vessels" },
     { label: "Reports",   href: "/reports" },
+    { label: "AI Narrative", href: "/narrative" },
     { label: "Users",     href: "/admin/users" },
   ];
 
