@@ -130,6 +130,11 @@ CREATE TABLE inspection_items (
   remaining_life_years  NUMERIC(4,1),    -- inspector's estimate
   replacement_cost      NUMERIC(12,2),   -- used if remaining life < horizon
 
+  -- ---- Deficiency tracking & alerting ----
+  deficiency_status    TEXT,        -- 'OPEN' | 'IN_PROGRESS' | 'CLOSED', NULL = not a deficiency
+  deficiency_action    TEXT,        -- inspector/owner's corrective action note
+  deficiency_closed_at TIMESTAMPTZ, -- set automatically when status becomes CLOSED
+
   sort_order     INT NOT NULL DEFAULT 0,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
