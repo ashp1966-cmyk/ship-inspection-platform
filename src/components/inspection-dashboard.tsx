@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   VESSEL_TYPES, GRADES, getConditionSections, getPrePurchaseSections, getPrePurchaseInventory,
+  getTechnicalSections,
   type VesselType, type Grade, type Question, type EquipmentItem, type Section,
 } from "@/lib/inspection-templates";
 import { projectFleet, usd, HORIZON_YEARS } from "@/lib/capex";
@@ -92,13 +93,26 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
     [prePurchaseSections]
   );
 
+  // Technical Inspection: 321 imported checklist items, already grouped
+  // 1:1 by their 16 source categories — no vessel-type filtering needed.
+  const technicalSections = useMemo(() => {
+    const base = getTechnicalSections();
+    return base.map(s => ({ ...s, questions: [...s.questions, ...(customSections[s.code]??[])] }));
+  }, [customSections]);
+  const technicalGroups = useMemo(
+    () => technicalSections.map(s => ({ key: s.code, label: s.title.replace(/^\d+\.\s*/, ""), sections: [s] })),
+    [technicalSections]
+  );
+
   const [conditionGroupKey, setConditionGroupKey] = useState<string>("general");
   const [prePurchaseGroupKey, setPrePurchaseGroupKey] = useState<string>("general");
+  const [technicalGroupKey, setTechnicalGroupKey] = useState<string>(technicalGroups[0]?.key ?? "");
 
   const activeConditionGroup = conditionGroups.find(g => g.key === conditionGroupKey) ?? conditionGroups[0];
   const activePrePurchaseGroup = prePurchaseGroupKey === "equipment"
     ? null
     : prePurchaseGroups.find(g => g.key === prePurchaseGroupKey) ?? prePurchaseGroups[0];
+  const activeTechnicalGroup = technicalGroups.find(g => g.key === technicalGroupKey) ?? technicalGroups[0];
 
   function handleVesselType(v: VesselType) {
     setVesselType(v); setAnswers({}); setRemarks({}); setAttachments({});
@@ -194,16 +208,18 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
     setTimeout(() => fileInputRef.current?.click(), 50);
   }
 
-  function buildQuestionMeta(type: "CONDITION"|"PRE_PURCHASE"): Record<string, string> {
+  function buildQuestionMeta(type: "CONDITION"|"PRE_PURCHASE"|"TECHNICAL"): Record<string, string> {
     const meta: Record<string, string> = {};
-    const sections = type === "PRE_PURCHASE" ? prePurchaseSections : conditionSections;
+    const sections = type === "PRE_PURCHASE" ? prePurchaseSections
+      : type === "TECHNICAL" ? technicalSections
+      : conditionSections;
     for (const s of sections) {
       for (const q of s.questions) meta[q.id] = q.answerKind;
     }
     return meta;
   }
 
-  async function saveInspection(type: "CONDITION"|"PRE_PURCHASE") {
+  async function saveInspection(type: "CONDITION"|"PRE_PURCHASE"|"TECHNICAL") {
     setSaving(true); setSaveError("");
     try {
       const res = await fetch("/api/inspections", {
@@ -504,9 +520,10 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
       </div>
 
       <Tabs defaultValue="condition">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="condition">Condition Inspection</TabsTrigger>
           <TabsTrigger value="prepurchase">Pre-Purchase Inspection</TabsTrigger>
+          <TabsTrigger value="technical">Technical Inspection</TabsTrigger>
         </TabsList>
 
         {/* CONDITION TAB */}
@@ -613,6 +630,19 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
           <div className="flex items-center gap-3 pt-1">
             <Button onClick={()=>saveInspection("PRE_PURCHASE")} disabled={saving}>
               {saving ? "Saving…" : "Save pre-purchase inspection"}
+            </Button>
+            {saved && <span className="text-sm text-emerald-600">Saved ✓</span>}
+            {saveError && <span className="text-sm text-red-500">{saveError}</span>}
+          </div>
+        </TabsContent>
+
+        {/* TECHNICAL TAB */}
+        <TabsContent value="technical" className="space-y-3 mt-4">
+          {renderGroupPills(technicalGroups, technicalGroupKey, setTechnicalGroupKey)}
+          {activeTechnicalGroup && renderSectionAccordion(activeTechnicalGroup.sections)}
+          <div className="flex items-center gap-3 pt-2">
+            <Button onClick={()=>saveInspection("TECHNICAL")} disabled={saving}>
+              {saving ? "Saving…" : "Save technical inspection"}
             </Button>
             {saved && <span className="text-sm text-emerald-600">Saved ✓</span>}
             {saveError && <span className="text-sm text-red-500">{saveError}</span>}

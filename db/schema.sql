@@ -16,7 +16,8 @@ CREATE TYPE vessel_type AS ENUM (
 
 CREATE TYPE inspection_type AS ENUM (
   'CONDITION',      -- current structural integrity / class / ops safety
-  'PRE_PURCHASE'    -- enhanced: inventory + CapEx + lifecycle projection
+  'PRE_PURCHASE',   -- enhanced: inventory + CapEx + lifecycle projection
+  'TECHNICAL'       -- 321-item technical survey checklist
 );
 
 CREATE TYPE grade AS ENUM (

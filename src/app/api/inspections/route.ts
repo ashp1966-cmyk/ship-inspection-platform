@@ -41,10 +41,10 @@ export async function POST(req: Request) {
 
         const [item] = await sql`
           INSERT INTO inspection_items
-            (inspection_id, section_code, prompt, question_id,
+            (inspection_id, section_code, prompt,
              grade_value, bool_value, text_value, number_value, date_value, remarks)
           VALUES
-            (${inspId}, ${sectionCode}, ${qId}, ${qId},
+            (${inspId}, ${sectionCode}, ${qId},
              ${gradeVal}, ${boolVal}, ${textVal}, ${numVal ? numVal.toString() : null},
              ${dateVal}, ${qRemarks})
           RETURNING id

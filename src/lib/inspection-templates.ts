@@ -14,7 +14,7 @@ export const VESSEL_TYPES = [
 ] as const;
 
 export type VesselType   = (typeof VESSEL_TYPES)[number]["value"];
-export type InspectionType = "CONDITION" | "PRE_PURCHASE";
+export type InspectionType = "CONDITION" | "PRE_PURCHASE" | "TECHNICAL";
 export type Grade = "GOOD" | "FAIR" | "POOR" | "ACTION_REQUIRED" | "NOT_SEEN" | "NA";
 
 export const GRADES: { value: Grade; label: string; tone: string }[] = [
@@ -668,4 +668,48 @@ const typeInventory: Record<VesselType, EquipmentItem[]> = {
 
 export function getPrePurchaseInventory(vesselType: VesselType): EquipmentItem[] {
   return [...universalInventory, ...typeInventory[vesselType]].map((it) => ({ ...it }));
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// TECHNICAL INSPECTION — imported from the 321-item survey checklist
+// (Checklist_-_INI-O-5.xlsx), grouped by its 16 survey categories.
+// ─────────────────────────────────────────────────────────────────────
+import technicalChecklist from "../../db/technical_inspection_checklist.json";
+
+interface TechnicalChecklistItem {
+  code: string;
+  question: string;
+  group: string;
+  priority: string;
+  location: string;
+  rank: string;
+}
+
+// The source spreadsheet dropped the "/" from this group's name.
+const GROUP_LABEL_FIXUPS: Record<string, string> = {
+  "GangwayAccommodation Ladder": "Gangway/Accommodation Ladder",
+};
+
+function slugifyGroup(group: string): string {
+  return "TECH_" + group.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+export function getTechnicalSections(): Section[] {
+  const items = (technicalChecklist as { items: TechnicalChecklistItem[] }).items;
+  const order: string[] = [];
+  const byGroup = new Map<string, TechnicalChecklistItem[]>();
+  for (const it of items) {
+    if (!byGroup.has(it.group)) { byGroup.set(it.group, []); order.push(it.group); }
+    byGroup.get(it.group)!.push(it);
+  }
+  return order.map((group, i) => ({
+    code: slugifyGroup(group),
+    title: `${i + 1}. ${GROUP_LABEL_FIXUPS[group] ?? group}`,
+    vesselType: null,
+    questions: byGroup.get(group)!.map((it) => ({
+      id: it.code,
+      prompt: it.location ? `${it.question} (${it.location})` : it.question,
+      answerKind: "GRADE" as const,
+    })),
+  }));
 }
