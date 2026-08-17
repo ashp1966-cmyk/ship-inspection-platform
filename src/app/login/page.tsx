@@ -40,7 +40,7 @@ export default function LoginPage() {
   return (
     <div style={{
       minHeight: "100vh",
-      background: "#0A1628",
+      background: "#F4F2EE",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -50,20 +50,15 @@ export default function LoginPage() {
       <div style={{
         width: "100%",
         maxWidth: 420,
-        background: "#0D1E35",
+        background: "#fff",
         borderRadius: 14,
         padding: "2.5rem 2rem",
-        border: "1px solid rgba(255,255,255,0.07)",
+        border: "1px solid #E5E7EB",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
       }}>
         {/* Logo */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: "1.5rem" }}>
-          <div style={{
-            background: "#fff",
-            borderRadius: 8,
-            padding: "10px 18px",
-            marginBottom: "1rem",
-            display: "inline-block",
-          }}>
+          <div style={{ marginBottom: "1rem", display: "inline-block" }}>
             <Image
               src="/auk-logo.png"
               alt="AUK Marine"
@@ -73,7 +68,7 @@ export default function LoginPage() {
             />
           </div>
           <h1 style={{
-            color: "#fff",
+            color: "#0A1628",
             fontSize: 17,
             fontWeight: 700,
             letterSpacing: "0.18em",
@@ -83,20 +78,20 @@ export default function LoginPage() {
           }}>
             AUK Marine and Mining
           </h1>
-          <p style={{ color: "#4ABFDA", fontSize: 15, letterSpacing: "0.03em" }}>
+          <p style={{ color: "#0E7490", fontSize: 15, letterSpacing: "0.03em", fontWeight: 500 }}>
             Ship Inspection Platform
           </p>
         </div>
 
         {/* Divider */}
-        <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", marginBottom: "1.75rem" }} />
+        <div style={{ borderTop: "1px solid #E5E7EB", marginBottom: "1.75rem" }} />
 
         <form onSubmit={handleSubmit}>
           {/* Email */}
           <div style={{ marginBottom: "1rem" }}>
             <label style={{
               display: "block",
-              color: "#6B9AB8",
+              color: "#6B7280",
               fontSize: 13,
               fontWeight: 600,
               letterSpacing: "0.1em",
@@ -115,10 +110,10 @@ export default function LoginPage() {
               style={{
                 width: "100%",
                 padding: "11px 14px",
-                background: "rgba(255,255,255,0.07)",
-                border: "1px solid rgba(255,255,255,0.12)",
+                background: "#fff",
+                border: "1px solid #D1D5DB",
                 borderRadius: 7,
-                color: "#fff",
+                color: "#111827",
                 fontSize: 16,
                 outline: "none",
               }}
@@ -129,7 +124,7 @@ export default function LoginPage() {
           <div style={{ marginBottom: "1.25rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
               <label style={{
-                color: "#6B9AB8",
+                color: "#6B7280",
                 fontSize: 13,
                 fontWeight: 600,
                 letterSpacing: "0.1em",
@@ -137,7 +132,7 @@ export default function LoginPage() {
               }}>
                 Password
               </label>
-              <span style={{ color: "#4ABFDA", fontSize: 14, cursor: "pointer" }}>
+              <span style={{ color: "#0E7490", fontSize: 14, cursor: "pointer" }}>
                 Forgot password?
               </span>
             </div>
@@ -152,10 +147,10 @@ export default function LoginPage() {
                 style={{
                   width: "100%",
                   padding: "11px 42px 11px 14px",
-                  background: "rgba(255,255,255,0.07)",
-                  border: "1px solid rgba(255,255,255,0.12)",
+                  background: "#fff",
+                  border: "1px solid #D1D5DB",
                   borderRadius: 7,
-                  color: "#fff",
+                  color: "#111827",
                   fontSize: 16,
                   outline: "none",
                 }}
@@ -170,7 +165,7 @@ export default function LoginPage() {
                   transform: "translateY(-50%)",
                   background: "none",
                   border: "none",
-                  color: "#6B9AB8",
+                  color: "#6B7280",
                   cursor: "pointer",
                   fontSize: 18,
                   padding: 0,
@@ -181,10 +176,10 @@ export default function LoginPage() {
               </button>
             </div>
             {error && (
-              <p style={{ color: "#F87171", fontSize: 14, marginTop: 6 }}>{error}</p>
+              <p style={{ color: "#DC2626", fontSize: 14, marginTop: 6 }}>{error}</p>
             )}
             {!error && (
-              <p style={{ color: "rgba(107,154,184,0.55)", fontSize: 13, marginTop: 6, textAlign: "right" }}>
+              <p style={{ color: "#6B7280", fontSize: 13, marginTop: 6, textAlign: "right" }}>
                 Press Enter or click Sign In
               </p>
             )}
@@ -216,10 +211,10 @@ export default function LoginPage() {
         <p style={{
           textAlign: "center",
           fontSize: 13.5,
-          color: "rgba(107,154,184,0.6)",
+          color: "#6B7280",
         }}>
           🔒 Authorized personnel only — contact{" "}
-          <span style={{ color: "#4ABFDA", fontWeight: 500 }}>AUK Marine</span>{" "}
+          <span style={{ color: "#0E7490", fontWeight: 500 }}>AUK Marine</span>{" "}
           for access
         </p>
       </div>
