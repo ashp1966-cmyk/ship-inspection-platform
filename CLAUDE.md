@@ -130,3 +130,46 @@ and surfaces `saveError` in the modal instead of silently "succeeding".
 **When adding a new form-backed table/column:** any optional DATE or NUMERIC field fed from a
 text input needs the same `""` → `null` coercion, and any fetch-based save handler needs to check
 `res.ok` before treating the response as success.
+
+## New bug shape: DATE columns come back as JS `Date` objects, not strings
+
+Found while investigating "vessel dates don't save right" — the write path was already correct
+(the `blank()` coercion above handles it, and `date_of_delivery`/`dry_dock_due` were stored
+exactly as typed). The bug is on the *read* path: the Neon driver (`@neondatabase/serverless`)
+parses Postgres `DATE` columns into JS `Date` objects built from local calendar components (local
+midnight), not plain strings. Every place that does `SELECT * FROM vessels` (or `RETURNING *`)
+and hands the row to `NextResponse.json()` or straight to a client component was serializing that
+`Date` via `toISOString()`, producing a full UTC timestamp like `"2015-05-31T22:00:00.000Z"`
+instead of `"2015-06-01"`. Two distinct symptoms depending on server/client timezone:
+
+- If the server's TZ is ahead of UTC, the date **silently shifts back a day** on every read
+  (confirmed directly against the live DB: inserting `2015-06-01` and reading it back on this
+  machine, TZ `Africa/Johannesburg`/UTC+2, returned `2015-05-31T22:00:00.000Z`).
+- Regardless of TZ, the ISO-timestamp string is not a valid `<input type="date">` value (browsers
+  require a bare `YYYY-MM-DD`), so `vessels-list.tsx`'s `openEdit()` — which assigns the fetched
+  value straight into form state — left the Date of Delivery / Dry Dock Due fields **blank on
+  every edit-reload**, even though the correct value was sitting in the database the whole time.
+
+This is a fourth instance of the "recurring pattern: things referenced in code that were never
+created in the DB" family in spirit (code assumed the DB driver hands back strings for DATE
+columns; it doesn't), but it's a genuinely different root cause from the `""`→`null` bug above —
+that one was a write-path bug (bad value going in), this one is a read-path serialization bug
+(good value coming back mangled). Don't conflate the two when debugging future date issues: check
+`typeof value` on what the driver returns before assuming either fix applies.
+
+Fixed with `dateStr()` in `src/lib/db.ts` — converts a driver `Date` back to `YYYY-MM-DD` using
+**local** getters (`getFullYear`/`getMonth`/`getDate`), matching how the driver built the Date in
+the first place, so it's correct regardless of the running server's TZ. Applied everywhere a
+vessel row's `date_of_delivery`/`dry_dock_due` reaches JSON or a client component: both handlers
+in `api/vessels/route.ts`, both in `api/vessels/[id]/route.ts`, and the two server components
+`app/vessels/page.tsx` / `app/vessels/[id]/page.tsx`.
+
+**When adding a new DATE column anywhere in this app:** any query that returns it (`SELECT *` or
+`RETURNING *`) needs `dateStr()` applied before the row reaches `NextResponse.json()` or a client
+component — don't assume the driver gives you back what you put in. `inspections.started_at` /
+`completed_at` and `capex_projections.date_value` are the same `DATE` type and carry the same
+latent risk, but are currently read-only display values (formatted with `fmt()`, never fed back
+into an editable `<input type="date">`), so the blank-on-reload symptom doesn't apply — only the
+TZ-shift-on-display one would, and only for viewers in a different TZ than the server. Not fixed
+here since it's out of scope for the vessel-date bug and no editable date input touches them; revisit
+if those dates start being edited or become the same style off-by-one.

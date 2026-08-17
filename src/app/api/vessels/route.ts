@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { sql, dateStr } from "@/lib/db";
 
 // Optional DATE/NUMERIC columns reject "" ("invalid input syntax for type
 // date/numeric") — the Vessels form leaves untouched fields as "", so blank
 // strings must be coerced to null before they hit the query.
 const blank = (v: unknown) => (v === "" || v === undefined ? null : v);
 
+// See dateStr() in @/lib/db — DATE columns come back as JS Date objects
+// that serialize wrong; normalize to plain "YYYY-MM-DD" before sending.
+const fixDates = (v: any) => ({ ...v, date_of_delivery: dateStr(v.date_of_delivery), dry_dock_due: dateStr(v.dry_dock_due) });
+
 export async function GET() {
   const rows = await sql`SELECT * FROM vessels ORDER BY name`;
-  return NextResponse.json(rows);
+  return NextResponse.json((rows as any[]).map(fixDates));
 }
 
 export async function POST(req: Request) {
@@ -29,7 +33,7 @@ export async function POST(req: Request) {
          ${blank(b.capacity_note)}, ${blank(b.dry_dock_due)})
       RETURNING *
     ` as any[];
-    return NextResponse.json(v, { status: 201 });
+    return NextResponse.json(fixDates(v), { status: 201 });
   } catch (err: any) {
     console.error(err);
     return NextResponse.json({ error: err.message }, { status: 500 });

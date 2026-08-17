@@ -1,11 +1,12 @@
-import { sql } from "@/lib/db";
+import { sql, dateStr } from "@/lib/db";
 import VesselHistory from "@/components/vessel-history";
 export const dynamic = "force-dynamic";
 
 export default async function VesselHistoryPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
-  const [vessel] = await sql`SELECT * FROM vessels WHERE id=${id}` as any[];
-  if (!vessel) return <div style={{padding:"2rem"}}>Vessel not found.</div>;
+  const [row] = await sql`SELECT * FROM vessels WHERE id=${id}` as any[];
+  if (!row) return <div style={{padding:"2rem"}}>Vessel not found.</div>;
+  const vessel = { ...row, date_of_delivery: dateStr(row.date_of_delivery), dry_dock_due: dateStr(row.dry_dock_due) };
 
   const inspections = await sql`
     SELECT i.id, i.inspection_type, i.status, i.started_at, i.overall_score,

@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { sql, dateStr } from "@/lib/db";
 
 // See src/app/api/vessels/route.ts — "" must be coerced to null for
 // optional DATE/NUMERIC columns or the update throws.
 const blank = (v: unknown) => (v === "" || v === undefined ? null : v);
 
+// See dateStr() in @/lib/db — DATE columns come back as JS Date objects
+// that serialize wrong; normalize to plain "YYYY-MM-DD" before sending.
+const fixDates = (v: any) => ({ ...v, date_of_delivery: dateStr(v.date_of_delivery), dry_dock_due: dateStr(v.dry_dock_due) });
+
 export async function GET(_: Request, props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
   const [v] = await sql`SELECT * FROM vessels WHERE id = ${id}` as any[];
   if (!v) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(v);
+  return NextResponse.json(fixDates(v));
 }
 
 export async function PUT(req: Request, props: { params: Promise<{ id: string }> }) {
@@ -34,7 +38,7 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
       WHERE id = ${id}
       RETURNING *
     ` as any[];
-    return NextResponse.json(v);
+    return NextResponse.json(fixDates(v));
   } catch (err: any) {
     console.error(err);
     return NextResponse.json({ error: err.message }, { status: 500 });
