@@ -21,6 +21,7 @@ export default function VesselsList({ vessels: initial }: { vessels: Vessel[] })
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing]  = useState<Vessel | null>(null);
   const [saving, setSaving]    = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [form, setForm] = useState({
     name:"", imo_number:"", vessel_type:"BULK_CARRIER", flag:"",
     port_of_registry:"", class_society:"", date_of_delivery:"",
@@ -31,6 +32,7 @@ export default function VesselsList({ vessels: initial }: { vessels: Vessel[] })
 
   function openAdd() {
     setEditing(null);
+    setSaveError("");
     setForm({ name:"", imo_number:"", vessel_type:"BULK_CARRIER", flag:"",
       port_of_registry:"", class_society:"", date_of_delivery:"",
       owners:"", managers:"", dwt:"", gt:"",
@@ -40,6 +42,7 @@ export default function VesselsList({ vessels: initial }: { vessels: Vessel[] })
   }
   function openEdit(v: Vessel) {
     setEditing(v);
+    setSaveError("");
     setForm({ ...v, dwt: String(v.dwt??''), gt: String((v as any).gt??''),
       total_power_kw: String((v as any).total_power_kw??''),
       date_of_delivery: (v as any).date_of_delivery ?? '',
@@ -51,17 +54,21 @@ export default function VesselsList({ vessels: initial }: { vessels: Vessel[] })
 
   async function saveVessel() {
     setSaving(true);
+    setSaveError("");
     try {
       const method = editing ? "PUT" : "POST";
       const url    = editing ? `/api/vessels/${editing.id}` : "/api/vessels";
       const res = await fetch(url, { method, headers:{"Content-Type":"application/json"}, body: JSON.stringify(form) });
       const saved = await res.json();
+      if (!res.ok) throw new Error(saved.error ?? "Failed to save vessel.");
       if (editing) {
         setVessels(prev => prev.map(v => v.id === saved.id ? saved : v));
       } else {
         setVessels(prev => [...prev, saved]);
       }
       setShowForm(false);
+    } catch (e: any) {
+      setSaveError(e.message);
     } finally { setSaving(false); }
   }
 
@@ -180,6 +187,9 @@ export default function VesselsList({ vessels: initial }: { vessels: Vessel[] })
               {F("Capacity Note", "capacity_note")}
               {F("Dry Dock Due", "dry_dock_due", "date")}
             </div>
+            {saveError && (
+              <p style={{ color:"#DC2626", fontSize:14, marginTop:"0.75rem" }}>{saveError}</p>
+            )}
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:"1rem" }}>
               <button onClick={() => setShowForm(false)} style={{ padding:"8px 18px", background:"#F3F4F6", border:"none", borderRadius:7, fontSize:15, cursor:"pointer" }}>Cancel</button>
               <button onClick={saveVessel} disabled={saving} style={{ padding:"8px 20px", background:NAV, color:"#fff", border:"none", borderRadius:7, fontSize:15, fontWeight:500, cursor:"pointer" }}>

@@ -49,3 +49,32 @@ front-end question ids (`c01`, `C01-0001`, etc.) into it — they aren't UUIDs a
 fail with `invalid input syntax for type uuid`. `src/app/api/inspections/route.ts` omits that
 column entirely; the question id is only stored (denormalized) in `prompt` /
 `inspection_items.section_code` derivation (`qId.split("-")[0]`).
+
+## Recurring pattern: unhandled `""` for optional DATE/NUMERIC columns
+
+Second time this exact shape of bug has turned up (first was the `question_id` UUID insert
+above) — an API route inserts a raw form value into a typed column with only `?? null` as
+guarding, which doesn't catch `""`. Postgres rejects `""` for `DATE`/`NUMERIC` columns with
+`invalid input syntax for type date/numeric`, not for `TEXT` columns, so it only bites on the
+non-text optional fields.
+
+Found in `src/app/api/vessels/route.ts` (POST) and `src/app/api/vessels/[id]/route.ts` (PUT): the
+Vessels form (`vessels-list.tsx`) defaults every optional field — including `date_of_delivery`,
+`dry_dock_due`, `dwt`, `gt`, `total_power_kw` — to `""`, and `b.dwt ?? null` passes that `""`
+straight through. Creating a vessel without filling in every optional field (the normal case)
+threw a 500 on every request. **Compounding bug on the frontend:** `vessels-list.tsx`'s
+`saveVessel()` never checked `res.ok` — it treated the error-JSON response as if it were the
+saved vessel, pushed it into local state, and closed the modal, so the failure was invisible to
+the user. Net effect: the vessels table was permanently empty, so the "Select vessel" dropdown on
+all three inspection tabs correctly showed "0 vessels registered" — the dropdown/link-by-`vesselId`
+logic itself was never broken (all three tabs already share one `<select>` and one `selectedVessel`
+state in `inspection-dashboard.tsx` — there's no per-tab implementation to diverge).
+
+Fix: both routes now coerce `""` → `null` for every optional field via a local `blank()` helper
+before the query, and wrap the insert/update in try/catch returning `{error}` with a non-200
+status (matching the pattern in `api/inspections/route.ts`). `saveVessel()` now checks `res.ok`
+and surfaces `saveError` in the modal instead of silently "succeeding".
+
+**When adding a new form-backed table/column:** any optional DATE or NUMERIC field fed from a
+text input needs the same `""` → `null` coercion, and any fetch-based save handler needs to check
+`res.ok` before treating the response as success.
