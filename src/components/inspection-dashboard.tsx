@@ -15,9 +15,22 @@ import {
 } from "@/lib/inspection-templates";
 import { projectFleet, usd, HORIZON_YEARS } from "@/lib/capex";
 import { cn } from "@/lib/utils";
+import sparesSpec from "../../db/random_spares_check_spec.json";
 
 interface Attachment { name:string; url:string; fileType:"photo"|"document"; size:number; uploading?:boolean; }
 interface VesselRow { id:string; name:string; imo_number:string; vessel_type:VesselType; }
+
+// Random Spares Check — a dynamic reconciliation table (add/remove rows
+// freely), not a fixed Q&A checklist, so it's rendered and saved separately
+// from the accordion sections. Column set comes from the spec JSON.
+type SparesSpecColumn = { key:string; label:string; type:string; editable:boolean };
+const SPARES_COLUMNS: SparesSpecColumn[] = (sparesSpec as { columns: SparesSpecColumn[] }).columns.filter(c => c.editable);
+type SparesRow = { rowKey:string } & Record<string, string>;
+const blankSparesRow = (): SparesRow => {
+  const row: SparesRow = { rowKey: `spr-${Date.now()}-${Math.random().toString(36).slice(2)}` };
+  for (const c of SPARES_COLUMNS) row[c.key] = "";
+  return row;
+};
 
 const TEAL="#1BA5C0";
 
@@ -66,6 +79,19 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
   const [uploadingFor, setUploadingFor] = useState<{qId:string, type:"photo"|"document", question?:Question}|null>(null);
   const [gradeSuggestions, setGradeSuggestions] = useState<Record<string, {grade:string; reasoning:string}>>({});
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set());
+  const [sparesRows, setSparesRows] = useState<SparesRow[]>(() =>
+    Array.from({ length: (sparesSpec as { initialBlankRows:number }).initialBlankRows }, blankSparesRow)
+  );
+
+  function addSparesRow() {
+    setSparesRows(prev => [...prev, blankSparesRow()]);
+  }
+  function deleteSparesRow(rowKey: string) {
+    setSparesRows(prev => prev.filter(r => r.rowKey !== rowKey));
+  }
+  function updateSparesRow(rowKey: string, key: string, value: string) {
+    setSparesRows(prev => prev.map(r => r.rowKey === rowKey ? { ...r, [key]: value } : r));
+  }
 
   const conditionSections = useMemo(() => {
     const base = getConditionSections(vesselType);
@@ -231,6 +257,7 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
           answers, questionMeta: buildQuestionMeta(type), remarks, attachments,
           inventory: type==="PRE_PURCHASE" ? inventory : undefined,
           projection: type==="PRE_PURCHASE" ? projection : undefined,
+          sparesCheck: type==="TECHNICAL" ? sparesRows.map(({rowKey, ...values}) => values) : undefined,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
@@ -487,6 +514,69 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
     );
   }
 
+  function renderSparesTable() {
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Random Spares Check</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Spot-check reconciliation of random spares against the vessel&apos;s FMS records.
+          </p>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12">Sr No.</TableHead>
+                {SPARES_COLUMNS.map(c => (
+                  <TableHead key={c.key} className="min-w-[140px]">{c.label}</TableHead>
+                ))}
+                <TableHead className="w-10" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sparesRows.map((row, i) => (
+                <TableRow key={row.rowKey}>
+                  <TableCell className="text-sm text-muted-foreground">{i + 1}</TableCell>
+                  {SPARES_COLUMNS.map(c => (
+                    <TableCell key={c.key}>
+                      {c.type === "textarea" ? (
+                        <textarea
+                          value={row[c.key]}
+                          onChange={e => updateSparesRow(row.rowKey, c.key, e.target.value)}
+                          rows={1}
+                          className="w-full min-w-[160px] rounded border px-2 py-1 text-sm"
+                          style={{ resize:"vertical", fontFamily:"inherit" }}
+                        />
+                      ) : (
+                        <Input
+                          type={c.type === "number" ? "number" : "text"}
+                          value={row[c.key]}
+                          onChange={e => updateSparesRow(row.rowKey, c.key, e.target.value)}
+                          className="h-8 text-sm min-w-[140px]"
+                        />
+                      )}
+                    </TableCell>
+                  ))}
+                  <TableCell>
+                    <button onClick={()=>deleteSparesRow(row.rowKey)} title="Delete row"
+                      style={{ color:"#9CA3AF", border:"none", background:"none", cursor:"pointer", fontSize:15 }}>
+                      ✕
+                    </button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <button onClick={addSparesRow}
+            className="mt-3 text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
+            <span className="text-base leading-none">+</span> Add row
+          </button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-5 p-4 md:p-6">
       {/* Hidden file input */}
@@ -638,8 +728,13 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
 
         {/* TECHNICAL TAB */}
         <TabsContent value="technical" className="space-y-3 mt-4">
-          {renderGroupPills(technicalGroups, technicalGroupKey, setTechnicalGroupKey)}
-          {activeTechnicalGroup && renderSectionAccordion(activeTechnicalGroup.sections)}
+          {renderGroupPills(
+            technicalGroups, technicalGroupKey, setTechnicalGroupKey,
+            [{ key:"spares_check", label:"Random Spares Check" }]
+          )}
+          {technicalGroupKey === "spares_check"
+            ? renderSparesTable()
+            : activeTechnicalGroup && renderSectionAccordion(activeTechnicalGroup.sections)}
           <div className="flex items-center gap-3 pt-2">
             <Button onClick={()=>saveInspection("TECHNICAL")} disabled={saving}>
               {saving ? "Saving…" : "Save technical inspection"}

@@ -1,0 +1,64 @@
+{
+  "sectionName": "Random Spares Check",
+  "sectionType": "dynamic_table",
+  "description": "Random spot-check reconciliation of critical spare parts against the vessel's FMS (spares management system) records.",
+  "columns": [
+    {
+      "key": "sr_no",
+      "label": "Sr No.",
+      "type": "auto_increment",
+      "editable": false
+    },
+    {
+      "key": "equipment_name",
+      "label": "Equipment Name",
+      "type": "text",
+      "editable": true
+    },
+    {
+      "key": "part_name",
+      "label": "Part Name",
+      "type": "text",
+      "editable": true
+    },
+    {
+      "key": "part_number",
+      "label": "Primary Part Number",
+      "type": "text",
+      "editable": true
+    },
+    {
+      "key": "fms_spare_location",
+      "label": "FMS Spare Location",
+      "type": "text",
+      "editable": true
+    },
+    {
+      "key": "qty_per_fms",
+      "label": "Total Qty as per FMS",
+      "type": "number",
+      "editable": true
+    },
+    {
+      "key": "actual_rob",
+      "label": "Actual ROB",
+      "type": "number",
+      "editable": true
+    },
+    {
+      "key": "actual_location",
+      "label": "Actual Spare Location",
+      "type": "text",
+      "editable": true
+    },
+    {
+      "key": "reconciliation_notes",
+      "label": "Reconciliation Done If Wrong?",
+      "type": "textarea",
+      "editable": true
+    }
+  ],
+  "initialBlankRows": 5,
+  "allowAddRow": true,
+  "allowDeleteRow": true
+}

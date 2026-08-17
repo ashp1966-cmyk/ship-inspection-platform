@@ -7,7 +7,7 @@ export async function POST(req: Request) {
     const {
       vesselId, vesselType, inspectionType,
       answers, questionMeta, remarks, attachments,
-      inventory, projection,
+      inventory, projection, sparesCheck,
     } = body;
 
     // 1. Create inspection record
@@ -82,7 +82,29 @@ export async function POST(req: Request) {
       }
     }
 
-    // 4. CapEx projection snapshot
+    // 4. Random Spares Check rows (Technical Inspection — dynamic table,
+    // not a fixed Q&A checklist, so it has its own table). Blank rows
+    // (nothing typed in any field) are dropped before saving.
+    if (Array.isArray(sparesCheck)) {
+      let srNo = 0;
+      for (const row of sparesCheck) {
+        const hasContent = Object.values(row).some((v) => typeof v === "string" ? v.trim() : v);
+        if (!hasContent) continue;
+        srNo += 1;
+        await sql`
+          INSERT INTO random_spares_check_items
+            (inspection_id, sr_no, equipment_name, part_name, part_number,
+             fms_spare_location, qty_per_fms, actual_rob, actual_location, reconciliation_notes)
+          VALUES
+            (${inspId}, ${srNo}, ${row.equipment_name || null}, ${row.part_name || null},
+             ${row.part_number || null}, ${row.fms_spare_location || null},
+             ${row.qty_per_fms || null}, ${row.actual_rob || null},
+             ${row.actual_location || null}, ${row.reconciliation_notes || null})
+        `;
+      }
+    }
+
+    // 5. CapEx projection snapshot
     if (projection?.yearTotals?.length === 5) {
       const [y1, y2, y3, y4, y5] = projection.yearTotals;
       await sql`

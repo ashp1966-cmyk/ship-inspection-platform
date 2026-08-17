@@ -172,6 +172,29 @@ CREATE TABLE capex_projections (
   generated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- ---------- 7. RANDOM SPARES CHECK (Technical Inspection dynamic table) ----
+-- Not a fixed Q&A checklist — the inspector adds/removes rows freely while
+-- spot-checking random spares against the vessel's FMS records. Shape
+-- (8 free-form columns, variable row count, no "question") doesn't fit
+-- inspection_items, so it gets its own table linked by inspection_id.
+-- Column set mirrors db/random_spares_check_spec.json.
+CREATE TABLE random_spares_check_items (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  inspection_id         UUID NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
+  sr_no                 INT NOT NULL,           -- display row number, not a DB identity
+  equipment_name        TEXT,
+  part_name             TEXT,
+  part_number           TEXT,
+  fms_spare_location    TEXT,
+  qty_per_fms           NUMERIC,
+  actual_rob            NUMERIC,
+  actual_location       TEXT,
+  reconciliation_notes  TEXT,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_spares_inspection ON random_spares_check_items(inspection_id, sr_no);
+
 -- ---------- updated_at trigger ----------------------------------------
 CREATE OR REPLACE FUNCTION set_updated_at() RETURNS trigger AS $$
 BEGIN NEW.updated_at = now(); RETURN NEW; END;
