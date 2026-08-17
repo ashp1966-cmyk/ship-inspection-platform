@@ -7,7 +7,7 @@ export async function POST(req: Request) {
     const {
       vesselId, vesselType, inspectionType,
       answers, questionMeta, remarks, attachments,
-      inventory, projection, sparesCheck,
+      inventory, projection, sparesCheck, defects,
     } = body;
 
     // 1. Create inspection record
@@ -104,7 +104,38 @@ export async function POST(req: Request) {
       }
     }
 
-    // 5. CapEx projection snapshot
+    // 5. Defect List (all three inspection types) — a dynamic list, not a
+    // fixed checklist, but its shape (one free-text description + a type +
+    // remarks + an optional photo) fits inspection_items/attachments well
+    // enough that it doesn't need its own table: prompt holds the
+    // description, text_value holds the defect type, remarks is remarks,
+    // and the photo reuses the same qId-keyed attachments map as every
+    // other question — the defect row's client-side rowKey stands in for
+    // qId. Rows with no description are dropped before saving.
+    if (Array.isArray(defects)) {
+      for (const row of defects) {
+        if (!row.description?.trim()) continue;
+        const [item] = await sql`
+          INSERT INTO inspection_items
+            (inspection_id, section_code, prompt, text_value, remarks)
+          VALUES
+            (${inspId}, 'DEFECT_LIST', ${row.description}, ${row.defectType || null}, ${row.remarks || null})
+          RETURNING id
+        ` as any[];
+
+        const photo = (attachments as Record<string, any[]>)?.[row.rowKey] ?? [];
+        for (const att of photo) {
+          await sql`
+            INSERT INTO attachments
+              (inspection_item_id, inspection_id, question_id, file_name, file_url, file_type, file_size)
+            VALUES
+              (${item.id}, ${inspId}, ${row.rowKey}, ${att.name}, ${att.url}, ${att.fileType ?? "photo"}, ${att.size ?? 0})
+          `;
+        }
+      }
+    }
+
+    // 6. CapEx projection snapshot
     if (projection?.yearTotals?.length === 5) {
       const [y1, y2, y3, y4, y5] = projection.yearTotals;
       await sql`

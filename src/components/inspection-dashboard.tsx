@@ -32,6 +32,22 @@ const blankSparesRow = (): SparesRow => {
   return row;
 };
 
+// Defect List — a dynamic add/remove list available on all three inspection
+// types. Unlike Random Spares Check, its shape (one free-text description +
+// a type + remarks + an optional photo) fits inspection_items/attachments
+// well enough that it's saved through those tables rather than a new one —
+// see CLAUDE.md.
+const DEFECT_TYPES = [
+  "Safety", "Fire", "Environment", "Structural", "Machinery",
+  "Navigation", "Pollution Prevention", "Regulatory/Documentation", "Other",
+];
+type DefectInspType = "CONDITION" | "PRE_PURCHASE" | "TECHNICAL";
+type DefectRow = { rowKey:string; description:string; defectType:string; remarks:string };
+const blankDefectRow = (): DefectRow => ({
+  rowKey: `def-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  description: "", defectType: "", remarks: "",
+});
+
 const TEAL="#1BA5C0";
 
 // Group sections into logical clusters so the long question list can be
@@ -91,6 +107,21 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
   }
   function updateSparesRow(rowKey: string, key: string, value: string) {
     setSparesRows(prev => prev.map(r => r.rowKey === rowKey ? { ...r, [key]: value } : r));
+  }
+
+  const [defectRows, setDefectRows] = useState<Record<DefectInspType, DefectRow[]>>({
+    CONDITION: [], PRE_PURCHASE: [], TECHNICAL: [],
+  });
+
+  function addDefectRow(type: DefectInspType) {
+    setDefectRows(prev => ({ ...prev, [type]: [...prev[type], blankDefectRow()] }));
+  }
+  function deleteDefectRow(type: DefectInspType, rowKey: string) {
+    setDefectRows(prev => ({ ...prev, [type]: prev[type].filter(r => r.rowKey !== rowKey) }));
+    setAttachments(prev => { const n = { ...prev }; delete n[rowKey]; return n; });
+  }
+  function updateDefectRow(type: DefectInspType, rowKey: string, patch: Partial<DefectRow>) {
+    setDefectRows(prev => ({ ...prev, [type]: prev[type].map(r => r.rowKey === rowKey ? { ...r, ...patch } : r) }));
   }
 
   const conditionSections = useMemo(() => {
@@ -258,6 +289,7 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
           inventory: type==="PRE_PURCHASE" ? inventory : undefined,
           projection: type==="PRE_PURCHASE" ? projection : undefined,
           sparesCheck: type==="TECHNICAL" ? sparesRows.map(({rowKey, ...values}) => values) : undefined,
+          defects: defectRows[type],
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
@@ -577,6 +609,100 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
     );
   }
 
+  function renderDefectTable(type: DefectInspType) {
+    const rows = defectRows[type];
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Defect List</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Log defects found during this inspection — description, type, remarks and an optional photo.
+          </p>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="min-w-[220px]">Defect Description</TableHead>
+                <TableHead className="min-w-[160px]">Defect Type</TableHead>
+                <TableHead className="min-w-[140px]">Photo</TableHead>
+                <TableHead className="min-w-[200px]">Remarks</TableHead>
+                <TableHead className="w-10" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map(row => {
+                const photo = (attachments[row.rowKey] ?? [])[0];
+                return (
+                  <TableRow key={row.rowKey}>
+                    <TableCell>
+                      <textarea
+                        value={row.description}
+                        onChange={e => updateDefectRow(type, row.rowKey, { description: e.target.value })}
+                        placeholder="Describe the defect…"
+                        rows={1}
+                        className="w-full min-w-[200px] rounded border px-2 py-1 text-sm"
+                        style={{ resize:"vertical", fontFamily:"inherit" }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Select value={row.defectType} onValueChange={v=>updateDefectRow(type, row.rowKey, { defectType: v })}>
+                        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
+                        <SelectContent>
+                          {DEFECT_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      {photo ? (
+                        <div style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 6px", background:"#F3F4F6", borderRadius:5, fontSize:13 }}>
+                          {photo.uploading ? (
+                            <span style={{ color:"#9CA3AF" }}>Uploading…</span>
+                          ) : (
+                            <a href={photo.url} target="_blank" rel="noreferrer">
+                              <img src={photo.url} alt={photo.name} style={{ width:28, height:28, objectFit:"cover", borderRadius:3 }} />
+                            </a>
+                          )}
+                          <button onClick={()=>setAttachments(prev=>({...prev,[row.rowKey]:[]}))}
+                            style={{ color:"#9CA3AF", border:"none", background:"none", cursor:"pointer", fontSize:14, padding:"0 2px" }}>✕</button>
+                        </div>
+                      ) : (
+                        <button onClick={()=>triggerUpload(row.rowKey,"photo")}
+                          style={{ padding:"4px 10px", border:"1px solid #D1D5DB", borderRadius:5, fontSize:13, cursor:"pointer", background:"#fff", whiteSpace:"nowrap" }}>
+                          📷 Add photo
+                        </button>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <textarea
+                        value={row.remarks}
+                        onChange={e => updateDefectRow(type, row.rowKey, { remarks: e.target.value })}
+                        placeholder="Remarks…"
+                        rows={1}
+                        className="w-full min-w-[180px] rounded border px-2 py-1 text-sm"
+                        style={{ resize:"vertical", fontFamily:"inherit" }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <button onClick={()=>deleteDefectRow(type, row.rowKey)} title="Delete row"
+                        style={{ color:"#9CA3AF", border:"none", background:"none", cursor:"pointer", fontSize:15 }}>
+                        ✕
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+          <button onClick={()=>addDefectRow(type)}
+            className="mt-3 text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
+            <span className="text-base leading-none">+</span> Add defect
+          </button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-5 p-4 md:p-6">
       {/* Hidden file input */}
@@ -618,8 +744,13 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
 
         {/* CONDITION TAB */}
         <TabsContent value="condition" className="space-y-3 mt-4">
-          {renderGroupPills(conditionGroups, conditionGroupKey, setConditionGroupKey)}
-          {activeConditionGroup && renderSectionAccordion(activeConditionGroup.sections)}
+          {renderGroupPills(
+            conditionGroups, conditionGroupKey, setConditionGroupKey,
+            [{ key:"defect_list", label:"Defect List" }]
+          )}
+          {conditionGroupKey === "defect_list"
+            ? renderDefectTable("CONDITION")
+            : activeConditionGroup && renderSectionAccordion(activeConditionGroup.sections)}
           <div className="flex items-center gap-3 pt-2">
             <Button onClick={()=>saveInspection("CONDITION")} disabled={saving}>
               {saving ? "Saving…" : "Save condition inspection"}
@@ -633,10 +764,12 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
         <TabsContent value="prepurchase" className="space-y-5 mt-4">
           {renderGroupPills(
             prePurchaseGroups, prePurchaseGroupKey, setPrePurchaseGroupKey,
-            [{ key:"equipment", label:"Equipment & CapEx" }]
+            [{ key:"equipment", label:"Equipment & CapEx" }, { key:"defect_list", label:"Defect List" }]
           )}
 
-          {activePrePurchaseGroup && renderSectionAccordion(activePrePurchaseGroup.sections)}
+          {prePurchaseGroupKey === "defect_list"
+            ? renderDefectTable("PRE_PURCHASE")
+            : prePurchaseGroupKey !== "equipment" && activePrePurchaseGroup && renderSectionAccordion(activePrePurchaseGroup.sections)}
 
           {prePurchaseGroupKey === "equipment" && (
             <>
@@ -730,10 +863,12 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
         <TabsContent value="technical" className="space-y-3 mt-4">
           {renderGroupPills(
             technicalGroups, technicalGroupKey, setTechnicalGroupKey,
-            [{ key:"spares_check", label:"Random Spares Check" }]
+            [{ key:"spares_check", label:"Random Spares Check" }, { key:"defect_list", label:"Defect List" }]
           )}
           {technicalGroupKey === "spares_check"
             ? renderSparesTable()
+            : technicalGroupKey === "defect_list"
+            ? renderDefectTable("TECHNICAL")
             : activeTechnicalGroup && renderSectionAccordion(activeTechnicalGroup.sections)}
           <div className="flex items-center gap-3 pt-2">
             <Button onClick={()=>saveInspection("TECHNICAL")} disabled={saving}>

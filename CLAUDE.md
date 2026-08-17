@@ -14,6 +14,9 @@ link from the "Select vessel" dropdown:
   used by the other two tabs. It also has a 17th pill, **Random Spares Check**, which is not part
   of `getTechnicalSections()` — see below.
 
+All three tabs also have a **Defect List** pill — a dynamic add/remove list (description, type
+dropdown, photo, remarks), not a fixed accordion section. See below.
+
 ## Random Spares Check (dynamic table, not a Q&A section)
 
 Random Spares Check is a free-form reconciliation table, not a fixed checklist: the inspector
@@ -35,6 +38,55 @@ Its shape (8 free-text/number columns, variable row count, no "question") doesn'
 - On save, `sparesCheck` is sent alongside `answers`/`inventory` in the same
   `POST /api/inspections` body (so it lands under the same `inspection_id` as the rest of the
   Technical Inspection), and rows where every field is blank are dropped before insert.
+
+## Defect List (dynamic list, reuses inspection_items — no new table)
+
+Defect List (Condition/Pre-Purchase/Technical, pill key `"defect_list"`) is a dynamic add/remove
+list like Random Spares Check, but its shape — one free-text description, a type dropdown, remarks,
+and an optional photo — is close enough to the normal Q&A row shape that it's saved through the
+*existing* `inspection_items` + `attachments` tables rather than a new one:
+
+- `prompt` holds the defect description (the user's typed text — unlike the rest of the app, where
+  `prompt` is a denormalized copy of a static question, here it *is* the answer, so storing it
+  directly is correct, not the `qId`-as-prompt shortcut noted above).
+- `text_value` holds the defect type (one of the 9 fixed options — Safety, Fire, Environment,
+  Structural, Machinery, Navigation, Pollution Prevention, Regulatory/Documentation, Other).
+- `remarks` maps directly to the remarks column.
+- `section_code = 'DEFECT_LIST'` marks these rows for querying/filtering.
+- The photo reuses the exact same mechanism as every other question's photo: each defect row gets
+  a client-generated `rowKey`, which stands in for `qId` in the shared `attachments` state map and
+  is passed straight to the existing `triggerUpload`/`handleFileSelect` functions unchanged. On
+  save, `POST /api/inspections` looks up `attachments[row.rowKey]` and inserts into `attachments`
+  with `question_id = row.rowKey`, same as the main answer loop.
+- Rows are per-inspection-type (`defectRows: Record<"CONDITION"|"PRE_PURCHASE"|"TECHNICAL",
+  DefectRow[]>` in `inspection-dashboard.tsx`), sent as `defects` in the save body, and rows with
+  no description are dropped before insert.
+
+This is the "reuse vs. new table" call working the other way from Random Spares Check: Random
+Spares Check's 8 columns (equipment/part/location/qty/etc.) had no honest mapping onto
+`inspection_items`, so it got its own table; Defect List's 3 free-form fields map cleanly onto
+`prompt`/`text_value`/`remarks`, which already exist and are already unused by anything else for
+these synthetic rows, so reusing them was the right call.
+
+## Recurring pattern: things referenced in code that were never created in the DB
+
+Third instance of this shape (after `question_id`-as-UUID and the vessel `""`→DATE/NUMERIC bug
+above) — while wiring up Defect List's photo upload, found that **the `attachments` table didn't
+exist in the database at all**, despite `POST /api/inspections` inserting into it since the
+Condition tab's photo-upload feature was built, and despite not being in `db/schema.sql` either.
+Confirmed directly: `POST /api/inspections` with any question given a photo/document threw
+`relation "attachments" does not exist` and failed the *entire* inspection save with a 500 — not
+just silently dropping the attachment. Fixed by creating the table (matching exactly the columns
+the code already expected: `inspection_item_id`, `inspection_id`, `question_id`, `file_name`,
+`file_url`, `file_type`, `file_size`) in both `db/schema.sql` and the live Neon DB. Photo/document
+attachments on any tab (not just the new Defect List) work now for the first time.
+
+**Lesson for next time:** before building a feature that depends on an existing table/column
+mentioned in code or docs, verify it actually exists in the live DB (`information_schema.tables`/
+`.columns`) rather than trusting the code path or `db/schema.sql` — this codebase has a
+established habit of code and schema drifting out of sync in both directions (`schema.sql` missing
+things the DB has, and — this time — code assuming a table that neither the DB nor `schema.sql`
+ever had).
 
 `inspection_type` (Postgres enum in `db/schema.sql`) has three values: `CONDITION`,
 `PRE_PURCHASE`, `TECHNICAL`. New enum values must be added both to `db/schema.sql` and to the

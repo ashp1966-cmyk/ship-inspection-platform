@@ -172,7 +172,28 @@ CREATE TABLE capex_projections (
   generated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- ---------- 7. RANDOM SPARES CHECK (Technical Inspection dynamic table) ----
+-- ---------- 7. ATTACHMENTS (photos/documents attached to answers) ----------
+-- Referenced by src/app/api/inspections/route.ts since the Condition tab's
+-- photo-upload feature was built, but the table itself was never created —
+-- every save of a question with a photo/document attached a 500'd. question_id
+-- is the client-side qId string (e.g. "c01", "C01-0001", a defect row key),
+-- denormalized like inspection_items.section_code — not a FK.
+CREATE TABLE attachments (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  inspection_item_id  UUID REFERENCES inspection_items(id) ON DELETE CASCADE,
+  inspection_id       UUID NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
+  question_id         TEXT,
+  file_name           TEXT,
+  file_url            TEXT NOT NULL,
+  file_type           TEXT,       -- 'photo' | 'document'
+  file_size           INTEGER,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_attachments_item        ON attachments(inspection_item_id);
+CREATE INDEX idx_attachments_inspection  ON attachments(inspection_id);
+
+-- ---------- 8. RANDOM SPARES CHECK (Technical Inspection dynamic table) ----
 -- Not a fixed Q&A checklist — the inspector adds/removes rows freely while
 -- spot-checking random spares against the vessel's FMS records. Shape
 -- (8 free-form columns, variable row count, no "question") doesn't fit
