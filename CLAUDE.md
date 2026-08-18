@@ -127,6 +127,98 @@ just `git diff` against the working tree) and skim it for large deletions of cod
 to touch — a stale-base overwrite shows up as a huge, unrelated deletion block sitting right next
 to the intended, legitimate change.
 
+### Second fallout from the same event: the `e3441b7` restore point was itself incomplete for `inspection-templates.ts`
+
+The fix above (commit `14c8d79`) restored `inspection-dashboard.tsx` **in full** from `e3441b7`,
+but only **partially** restored `inspection-templates.ts` — it re-added just `getTechnicalSections()`
+and left the rest of the file as `38dbd38` had rewritten it. That left two more casualties of the
+same stale-base overwrite undiscovered for a day:
+
+1. **Pre-Purchase lost the entire Condition-scope question set.** `38dbd38` restructured
+   `getPrePurchaseSections()` from `[...getConditionSections(vesselType), ...prePurchaseOnly]`
+   (the `e3441b7` shape — full Condition scope plus due-diligence extras) to
+   `[...universalPrePurchase, ...typeSpecificPrePurchase.filter(...)]` — dropping the
+   `getConditionSections(vesselType)` spread entirely. Pre-Purchase went from ~300+ questions
+   (full Condition scope + due diligence) down to ~44–50 (due diligence only).
+2. **Several Condition sections lost real question content**, not just renames — comparing
+   per-section-code question counts between `e3441b7` and the post-`14c8d79` state:
+   `DECK_MACHINERY` 20→11, `ENGINE_ROOM` 32→25, `HULL_DECKS` 28→18, `NAVIGATION` 29→19,
+   `POLLUTION` 23→15, `SAFETY_MGMT` 34→23, `EQUIP_TESTS` 23→20, `CARGO_HOLDS` 15→12,
+   `CARGO_TANKS` 5→4, `BALLAST` 7→6 — while other sections in the same file were untouched
+   (`CERTIFICATION` 19=19, `CREW_MGMT` 18=18, `CONTAINER_SYS` 5=5, `STRUCTURAL` 8=8). This
+   selective, section-by-section trimming (rather than a uniform cut) is the signature of the
+   same "rewritten from a stale/condensed copy" damage as the Technical tab loss, just inside
+   `inspection-templates.ts`'s question arrays instead of `inspection-dashboard.tsx`'s tab wiring.
+3. **`38dbd38` also legitimately renamed** the due-diligence section codes
+   (`CLASS_SURVEY_STATUS`→`CLASS_STATUS`, `DOC_REVIEW_PP`→`DOC_REVIEW`, `VESSEL_PERFORMANCE`→
+   `PERFORMANCE`, `SPACES_INSPECTED`→`SPACES_INSPECTION`, `DEFICIENCY_REGISTER`→`DEFICIENCY_REG`)
+   and **genuinely added** a new feature — splitting the old single universal
+   `CARGO_MACHINERY_PARTICULARS` section (6 questions, shown to every vessel type) into 7
+   vessel-type-specific "G. ... Verification" sections (`CARGO_GEAR_VERIFY` for bulk carriers,
+   `CARGO_SYS_VERIFY` for tankers, `GAS_SYS_VERIFY` for LNG, etc. — this is what the commit
+   message's "PP vessel sections" phrase meant). Because `inspection-dashboard.tsx` was restored
+   from `e3441b7` (which still had the old code names and no `*_VERIFY` codes),
+   `DUE_DILIGENCE_GROUP.codes` no longer matched anything in the templates file — the whole
+   Due Diligence pill's section list silently mismatched, on top of problem #1.
+   Two Condition-only section codes, `HULL_DECKS` and `EQUIP_TESTS`, were *also* never listed in
+   `QUESTION_GROUPS` at all — not a `38dbd38`/`14c8d79` regression, this gap already existed in
+   `e3441b7` and further back — so those two sections' questions existed in the data but had never
+   rendered in any pill, on Condition or Pre-Purchase, since sub-tab grouping was introduced.
+
+**Fix (this round):** spliced `e3441b7`'s full `universalCondition` + `typeSpecificCondition`
+arrays back into `inspection-templates.ts` (restoring the trimmed question counts above) while
+keeping everything `38dbd38` legitimately added on top — the enhanced `EquipmentItem` fields, the
+`*_VERIFY` vessel-specific due-diligence sections, and the renamed due-diligence codes. Changed
+`getPrePurchaseSections()` back to
+`[...getConditionSections(vesselType), ...universalPrePurchase, ...typeSpecificPrePurchase.filter(...)]`.
+Updated `DUE_DILIGENCE_GROUP.codes` in `inspection-dashboard.tsx` to the current section codes
+(`CLASS_STATUS`/`DOC_REVIEW`/`PERFORMANCE`/`SPACES_INSPECTION`/`DEFICIENCY_REG` plus all 7
+`*_VERIFY` codes), and added `HULL_DECKS` to the `structural` `QUESTION_GROUPS` entry and
+`EQUIP_TESTS` to `machinery` so every section code that exists in `inspection-templates.ts` is
+claimed by exactly one pill — verified with a script (`grep -oE 'code:\s*"[A-Z_]+"' ... | sort -u`
+against `QUESTION_GROUPS`/`DUE_DILIGENCE_GROUP`) that no orphaned section codes remain.
+
+**Confirmed safe / lost commit range, so a third occurrence doesn't need re-investigation:**
+- `e3441b7` (Defect List commit) — last commit where **`inspection-dashboard.tsx`** was fully
+  correct (Technical tab, Random Spares Check, Defect List, AI photo grading, group-pill nav all
+  present). **Not** fully correct for `inspection-templates.ts` question *content* by the
+  standard of "what should exist" — it had the full 331-question Condition/PP set and the old
+  due-diligence code names, but not yet the `*_VERIFY` vessel-split or the enhanced `EquipmentItem`
+  fields (those were genuinely new in the next commit).
+- `38dbd38` — the stale-base rewrite. Lost, relative to `e3441b7`: Technical Inspection tab,
+  Random Spares Check, Defect List, AI photo grading, group-pill navigation (all in
+  `inspection-dashboard.tsx`), `getTechnicalSections()` (in `inspection-templates.ts`), the
+  Condition-scope merge inside `getPrePurchaseSections()`, and real question content inside
+  `DECK_MACHINERY`/`ENGINE_ROOM`/`HULL_DECKS`/`NAVIGATION`/`POLLUTION`/`SAFETY_MGMT`/
+  `EQUIP_TESTS`/`CARGO_HOLDS`/`CARGO_TANKS`/`BALLAST`. Gained, legitimately: enhanced
+  `EquipmentItem` fields, the `*_VERIFY` per-vessel-type due-diligence split, renamed due-diligence
+  codes, and the dashboard-overview clickable-cards work (a separate file, not touched by either
+  restore).
+- `14c8d79` (first fix) — fully correct for `inspection-dashboard.tsx`. Still carried forward
+  `38dbd38`'s truncated `inspection-templates.ts` content (only patched in `getTechnicalSections`),
+  so Pre-Purchase question count and vessel-type filtering remained broken until this second fix.
+- **After this second fix, before it was committed**, a full line-by-line `diff` of `e3441b7` vs
+  `38dbd38` was run on both files (not just a re-check of the two already-known items) to look for
+  any other casualty. It found one more: **`universalInventory`/`typeInventory` in
+  `inspection-templates.ts`** (the default-row lists for the Pre-Purchase Equipment Inventory
+  table) had also been trimmed by `38dbd38` — missing "ME Flow Meter" and "MGPS (Marine Growth
+  Prevention System)" from `MACHINERY_INV`; "Aldis Lamp", "Navtex Receiver" and "Gyro Compass" from
+  `NAV_COMMS_INV`; "Fixed Foam System" from `SAFETY_INV` (and its two "Portable Gas Detectors"
+  variants merged into one); and "Cargo Heaters/Vaporisers" from the `LNG_CARRIER` type-specific
+  list. Restored all of these. Confirmed via a section-by-section question-count diff script
+  (`e3441b7` vs the working tree, not vs `HEAD` — the fixes were still uncommitted at diff time,
+  so diffing against `HEAD` here would have shown false regressions) that every other section now
+  matches `e3441b7` exactly, with the only remaining differences being `38dbd38`'s legitimate,
+  intentional additions (enhanced `EquipmentItem` fields, `*_VERIFY` sections, renamed
+  due-diligence codes, reworded due-diligence question text).
+- **Current working tree (pending commit)** is the first state where both files are believed fully
+  reconciled: all of `e3441b7`'s content restored (Condition/PP question arrays *and* the equipment
+  inventory default-row lists), all of `38dbd38`'s genuine additions kept, plus the pre-existing
+  `HULL_DECKS`/`EQUIP_TESTS` pill-orphaning bug (present since sub-tab grouping was introduced,
+  unrelated to either stale-base incident) fixed as a byproduct of reconciling the two files. If a
+  third symptom surfaces in either file, it did **not** originate in `38dbd38` — start from
+  `git diff` against *this* commit (once made) instead of re-diffing `e3441b7`.
+
 `inspection_type` (Postgres enum in `db/schema.sql`) has three values: `CONDITION`,
 `PRE_PURCHASE`, `TECHNICAL`. New enum values must be added both to `db/schema.sql` and to the
 live Neon DB via `ALTER TYPE inspection_type ADD VALUE ...` — the schema file is not

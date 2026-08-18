@@ -58,13 +58,14 @@ type GroupDef = { key:string; label:string; codes:string[] };
 const QUESTION_GROUPS: GroupDef[] = [
   { key:"general",     label:"General & Documentation", codes:["CERTIFICATION","CREW_MGMT","ACCOMMODATION"] },
   { key:"nav_safety",  label:"Navigation & Safety",      codes:["NAVIGATION","SAFETY_MGMT","POLLUTION"] },
-  { key:"structural",  label:"Structural & Ballast",     codes:["STRUCTURAL","BALLAST"] },
-  { key:"machinery",   label:"Machinery & Deck",         codes:["DECK_MACHINERY","ENGINE_ROOM"] },
+  { key:"structural",  label:"Structural & Ballast",     codes:["STRUCTURAL","BALLAST","HULL_DECKS"] },
+  { key:"machinery",   label:"Machinery & Deck",         codes:["DECK_MACHINERY","ENGINE_ROOM","EQUIP_TESTS"] },
   { key:"cargo",       label:"Cargo Systems",            codes:["CARGO_HOLDS","CONTAINER_SYS","CARGO_TANKS","CARGO_CONTAINMENT","TWEEN_DECKS","GAS_SYSTEMS","HOTEL_PAX"] },
 ];
 const DUE_DILIGENCE_GROUP: GroupDef = {
   key:"due_diligence", label:"Due Diligence",
-  codes:["VESSEL_HISTORY","CLASS_SURVEY_STATUS","DOC_REVIEW_PP","VESSEL_PERFORMANCE","SPACES_INSPECTED","CARGO_MACHINERY_PARTICULARS","DEFICIENCY_REGISTER"],
+  codes:["VESSEL_HISTORY","CLASS_STATUS","DOC_REVIEW","PERFORMANCE","SPACES_INSPECTION","DEFICIENCY_REG",
+    "CARGO_GEAR_VERIFY","CARGO_SYS_VERIFY","GAS_SYS_VERIFY","CONTAINER_VERIFY","LPG_VERIFY","GC_VERIFY","CRUISE_VERIFY"],
 };
 
 function groupSections(sections: Section[], groups: GroupDef[]) {
