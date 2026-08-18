@@ -88,6 +88,45 @@ established habit of code and schema drifting out of sync in both directions (`s
 things the DB has, and — this time — code assuming a table that neither the DB nor `schema.sql`
 ever had).
 
+## Regression: a "feature" commit silently reverted three prior commits by editing from a stale copy
+
+Commit `38dbd38` ("feat: clickable cards, NA option, PP vessel sections, equipment specs")
+rewrote `src/components/inspection-dashboard.tsx` and `src/lib/inspection-templates.ts` from a
+copy of those files that predated `57c5a6b` (Technical Inspection tab), `f0e2d89` (Random Spares
+Check) and `e3441b7` (Defect List). The commit's own intended changes — the enhanced Equipment
+Inventory columns (manufacturer/year/specifications/condition), the simplified due-diligence
+Pre-Purchase layout, and the dashboard-overview clickable-cards work — were real and correct, but
+because the starting point for the diff was stale, saving it also deleted, in one shot: the
+`getTechnicalSections()`/`technical_inspection_checklist.json` import, the Technical Inspection
+`TabsTrigger`/`TabsContent` (dropping `TabsList` back to `grid-cols-2`), `getTechnicalSections`
+itself from `inspection-templates.ts`, the Random Spares Check table/state, the Defect List
+table/state for all three inspection types, the category-pill sub-tab navigation
+(`renderGroupPills`/`QUESTION_GROUPS`), and the AI photo-grading feature
+(`analyzePhoto`/`gradeSuggestions`). None of that removal was mentioned in the commit message or
+was an intentional part of "clickable cards, NA option, PP vessel sections, equipment specs" —
+it was silent collateral damage from editing a stale base file, not a deliberate rollback.
+
+**Symptom:** the Technical Inspection tab (and, less visibly, Random Spares Check, Defect List,
+and the pill-based section navigation on all three tabs) simply stopped rendering — no error, no
+crash, just a `TabsList` with two triggers instead of three, because the third `TabsTrigger` no
+longer existed in the file.
+
+**Fix:** restored `inspection-dashboard.tsx` from `e3441b7` (the last commit with all three
+features intact) and re-layered `38dbd38`'s genuinely new Equipment Inventory columns on top of
+the restored file's PP equipment table; restored `getTechnicalSections()` (plus its
+`TechnicalChecklistItem` type, `GROUP_LABEL_FIXUPS`, `slugifyGroup`, and the
+`technical_inspection_checklist.json` import) into `inspection-templates.ts`, which had also lost
+it in the same commit.
+
+**Lesson for next time:** before starting a UI/feature change to a file that's been touched by
+several recent commits, diff the working copy against `HEAD` (or check `git log -p -3 -- <file>`)
+to confirm the file you're about to edit still contains the most recent commits' work — don't
+assume an open editor buffer or a cached copy is current. After finishing a change to a
+long-lived, frequently-edited component, run `git diff <previous-commit> HEAD -- <file>` (not
+just `git diff` against the working tree) and skim it for large deletions of code you didn't mean
+to touch — a stale-base overwrite shows up as a huge, unrelated deletion block sitting right next
+to the intended, legitimate change.
+
 `inspection_type` (Postgres enum in `db/schema.sql`) has three values: `CONDITION`,
 `PRE_PURCHASE`, `TECHNICAL`. New enum values must be added both to `db/schema.sql` and to the
 live Neon DB via `ALTER TYPE inspection_type ADD VALUE ...` — the schema file is not
