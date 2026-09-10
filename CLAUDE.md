@@ -304,3 +304,123 @@ into an editable `<input type="date">`), so the blank-on-reload symptom doesn't 
 TZ-shift-on-display one would, and only for viewers in a different TZ than the server. Not fixed
 here since it's out of scope for the vessel-date bug and no editable date input touches them; revisit
 if those dates start being edited or become the same style off-by-one.
+
+## Incident: "A server error occurred" site-wide + broken Forgot Password — turned out to be two unrelated bugs, NOT the custom domain
+
+When `https://inspections.auk-maritime.com` (a custom domain added to this Vercel project) started
+showing "A server error occurred" on every load, the working hypothesis was a stale site-URL env
+var left over from before the domain was connected (this app previously had no custom domain, only
+the `*.vercel.app` URL) — specifically that `NEXTAUTH_URL` or similar didn't match the new origin.
+**That hypothesis was wrong and this app doesn't have that failure mode at all**: there is no
+NextAuth here — auth is fully custom (`src/proxy.ts`, Next 16's renamed `middleware.ts`, gates
+routes by verifying a `ship_session` JWT cookie; `POST /api/auth/login` issues it). No code path
+compares the configured site URL against the request origin, so a custom-domain mismatch of that
+specific kind cannot produce this symptom in this app.
+
+**Actual root cause (from `vercel logs`, not guessed):**
+```
+Error [NeonDbError]: password authentication failed for user 'neondb_owner'
+```
+on `GET /` (the dashboard queries `vessels`/`inspections`/`inspection_items` counts on every
+load — see `src/app/page.tsx`). The Neon database password had been rotated/reset independently
+of Vercel and independently of the domain change — `DATABASE_URL` in both Vercel and
+`.env.local` still had the old password. Confirmed by reproducing the identical error running a
+query locally with the same (stale) connection string. **This had nothing to do with the domain
+being added** — it would have broken the old `*.vercel.app` URL identically; it was coincidental
+timing, not causation. `/login` itself rendered fine (200) throughout, because the login page
+does no DB query — only pages/routes that hit the DB (`/`, most API routes) were affected, which
+is why the symptom looked like "the whole site is down" rather than "the database is down": the
+one page that still worked was the one most people would try first while troubleshooting.
+
+**Fix:** obtained a fresh Neon connection string, updated `DATABASE_URL` in `.env.local` and in
+Vercel (production; preview environment update was blocked by a `vercel env add ... preview` CLI
+quirk requiring a git-branch argument that kept re-prompting even when following its own suggested
+fix — do via the Vercel dashboard if preview deploys need it), then redeployed and verified via
+`vercel logs` (no more `NeonDbError`) and by logging in + loading `/` end-to-end against production.
+
+**When a custom domain is added to this (or any) Vercel project going forward:**
+1. Don't assume a site-wide error after a domain change is caused by the domain change — pull
+   `vercel logs` for the *actual* stack trace first. This app has been bitten before by
+   guessing at root causes from symptoms alone (see the `38dbd38` stale-overwrite section above);
+   the same discipline applies to infra incidents, not just code regressions.
+2. This app has no `NEXTAUTH_URL`/site-URL config that a domain change could invalidate for auth
+   itself. The one place a site URL *is* used is `NEXT_PUBLIC_APP_URL`, consumed only by
+   `src/app/api/alerts/route.ts` (deficiency alert emails) and the new
+   `src/app/api/auth/forgot-password/route.ts` (reset-link emails) to build an absolute link in
+   an email body — if that var is still the old `*.vercel.app` value after a domain switch, alert
+   and reset-password emails will link to the wrong host (the email still sends, it just points
+   to the old URL). Update `NEXT_PUBLIC_APP_URL` to the new canonical domain whenever one is added.
+3. A DB credential failure and a domain change are easy to conflate if they happen close together
+   in time — they are almost always unrelated. Test the DB connection string in isolation
+   (`node -e` a one-line query against `DATABASE_URL`, same as this incident) before assuming
+   anything domain- or routing-related is the cause of a 500 that only shows up on
+   database-touching routes.
+
+### Side finding: this app's Neon database is shared with an unrelated application
+
+While investigating, `information_schema.tables` on the live `neondb` database (same host as
+`DATABASE_URL`) showed this app's tables (`vessels`, `inspections`, `inspection_items`,
+`attachments`, `capex_projections`, `random_spares_check_items`, `template_sections`,
+`template_questions`, `vessel_specific_fields`, now also `users`/`password_reset_tokens`)
+**alongside a completely unrelated set** — `Admin`, `Booking`, `Course`, `Enrollment`,
+`Facilitator`, `Learner`, `Certificate`, `CategoryMeta`, `PayfastSecret`, `RateLimit`, `Research`,
+`ResearchInterest`, `Session`, `SiteSettings`, `PasswordResetToken` — Prisma-style PascalCase
+names, almost certainly belonging to a different AUK project (likely the training/LMS platform,
+`auk-marine-training`, going by the Course/Enrollment/Certificate/Learner domain and the
+Vercel org's other projects). No table-name collision occurred here (this app's new tables are
+lowercase `users`/`password_reset_tokens`; the other app's are PascalCase, including its own
+unrelated `PasswordResetToken`), but this means the two apps share one Neon database/credential
+set. A password rotation, extension change, or destructive migration on either app's behalf
+risks the other. Not fixed as part of this incident (out of scope, and splitting a live shared
+DB is a deliberate, coordinated migration, not a quick fix) — worth deliberately separating into
+its own Neon project/database next time either app's schema needs a significant change, and worth
+checking `information_schema.tables` for unexpected tables before assuming a "table doesn't
+exist" or "table already exists" error belongs to this app's own migration history.
+
+## Forgot Password: was a non-functional UI stub, now a real email-based reset flow
+
+`src/app/login/page.tsx`'s "Forgot password?" was a plain `<span>` with no `onClick`, no `href`,
+and no backing route or endpoint anywhere in the codebase — clicking it did nothing. It was
+never wired up, not broken by a regression. Unrelated to the Neon incident above (the two were
+reported together but have independent root causes and independent fixes).
+
+Also found while building the fix: `/api/auth/login` has queried `SELECT * FROM users WHERE
+email = ... AND is_active = true` since it was first written, but the `users` table never
+existed in `db/schema.sql` or the live DB — another instance of the "recurring pattern: things
+referenced in code that were never created in the DB" family documented above. It never
+surfaced as a crash because the route wraps that query in try/catch and falls back to the
+`AUTH_EMAIL`/`AUTH_PASSWORD` env-var admin on any DB error — so every login before this fix
+silently used the env-var path, DB or no DB.
+
+**Fix:** added `users` and `password_reset_tokens` tables to `db/schema.sql` and the live DB (see
+their comments in `db/schema.sql` for the exact shape), migrated the env-var admin into a real
+`users` row with its password bcrypt-hashed (cost 12, via `bcryptjs` — already a dependency,
+already used by the DB-user path in `/api/auth/login`; no new library introduced), and built:
+- `POST /api/auth/forgot-password` — looks up the user, and always returns the same generic
+  message regardless of whether the email matched (prevents user enumeration); on a match,
+  stores a sha256 hash of a random 32-byte token (never the plaintext) with a 1-hour expiry in
+  `password_reset_tokens`, and emails the plaintext reset link via Resend (same
+  `RESEND_API_KEY`/`fetch("https://api.resend.com/emails")` pattern as
+  `src/app/api/alerts/route.ts`), built from `NEXT_PUBLIC_APP_URL` — see the note above about
+  keeping that var current after a domain change.
+- `POST /api/auth/reset-password` — hashes the submitted token, checks it against
+  `password_reset_tokens` for an unused, unexpired match, updates `users.password_hash`
+  (bcrypt, cost 12), and marks the token used (single-use, verified directly against
+  production: re-submitting the same token after a successful reset now gets rejected).
+- `src/app/forgot-password/page.tsx` and `src/app/reset-password/page.tsx` — new pages, styled
+  to match `src/app/login/page.tsx`; `src/proxy.ts`'s public-route allowlist was extended to
+  include both so the session-required redirect doesn't block them.
+- The login page's "Forgot password?" now links to `/forgot-password` instead of being inert.
+
+Verified end-to-end directly against `https://inspections.auk-maritime.com` (API calls, not
+just local/unit-level): requested a reset, confirmed the token row landed in
+`password_reset_tokens`, completed the reset with a freshly generated token, confirmed
+`users.password_hash` actually changed and the new password verifies via `bcrypt.compare`, and
+confirmed a second attempt to reuse the same token is rejected. The admin's original password was
+restored immediately after the test so it still matches the documented `AUTH_PASSWORD` env var.
+
+**When adding any other DB-backed feature to this app going forward:** check
+`information_schema.tables`/`.columns` against the *live* DB before trusting that a table a route
+already queries actually exists — this is now the fourth+ time in this codebase that code assumed
+a table which was never created (see `attachments` above, and now `users`). A try/catch fallback
+can hide this for a long time, exactly as it did here.

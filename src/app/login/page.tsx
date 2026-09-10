@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 
 export default function LoginPage() {
@@ -132,9 +133,9 @@ export default function LoginPage() {
               }}>
                 Password
               </label>
-              <span style={{ color: "#0E7490", fontSize: 14, cursor: "pointer" }}>
+              <Link href="/forgot-password" style={{ color: "#0E7490", fontSize: 14 }}>
                 Forgot password?
-              </span>
+              </Link>
             </div>
             <div style={{ position: "relative" }}>
               <input

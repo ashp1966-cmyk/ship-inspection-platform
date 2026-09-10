@@ -216,6 +216,41 @@ CREATE TABLE random_spares_check_items (
 
 CREATE INDEX idx_spares_inspection ON random_spares_check_items(inspection_id, sr_no);
 
+-- ---------- 9. USERS + PASSWORD RESET ----------------------------------
+-- Referenced by src/app/api/auth/login/route.ts since it was first written
+-- (SELECT * FROM users WHERE email = ... AND is_active = true), but this
+-- table never actually existed in the DB or in this file until the
+-- forgot-password feature was built — the login route's try/catch silently
+-- fell back to the AUTH_EMAIL/AUTH_PASSWORD env-var admin every time.
+-- Same "referenced in code, never created in the DB" shape as the
+-- attachments table (see CLAUDE.md). Seed one admin row from the current
+-- env-var credentials when deploying this so self-service reset has
+-- somewhere persistent to write the new password.
+CREATE TABLE users (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email         TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  full_name     TEXT NOT NULL,
+  role          TEXT NOT NULL DEFAULT 'inspector',
+  is_active     BOOLEAN NOT NULL DEFAULT true,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Reset tokens are stored hashed (sha256), never in plaintext — the
+-- plaintext token only ever exists in the emailed link and the requester's
+-- browser. Short-lived (1 hour) and single-use (used_at set on redemption).
+CREATE TABLE password_reset_tokens (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash   TEXT NOT NULL UNIQUE,
+  expires_at   TIMESTAMPTZ NOT NULL,
+  used_at      TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_reset_tokens_user ON password_reset_tokens(user_id);
+
 -- ---------- updated_at trigger ----------------------------------------
 CREATE OR REPLACE FUNCTION set_updated_at() RETURNS trigger AS $$
 BEGIN NEW.updated_at = now(); RETURN NEW; END;
