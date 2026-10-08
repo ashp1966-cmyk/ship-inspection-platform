@@ -345,8 +345,7 @@ fix — do via the Vercel dashboard if preview deploys need it), then redeployed
    the same discipline applies to infra incidents, not just code regressions.
 2. This app has no `NEXTAUTH_URL`/site-URL config that a domain change could invalidate for auth
    itself. The one place a site URL *is* used is `NEXT_PUBLIC_APP_URL`, consumed only by
-   `src/app/api/alerts/route.ts` (deficiency alert emails) and the new
-   `src/app/api/auth/forgot-password/route.ts` (reset-link emails) to build an absolute link in
+   `src/app/api/auth/forgot-password/route.ts` (reset-link emails; the old `api/alerts` route that also used it was removed) to build an absolute link in
    an email body — if that var is still the old `*.vercel.app` value after a domain switch, alert
    and reset-password emails will link to the wrong host (the email still sends, it just points
    to the old URL). Update `NEXT_PUBLIC_APP_URL` to the new canonical domain whenever one is added.
@@ -511,3 +510,25 @@ AUK is both a tenant (owns all pre-existing data) and the platform admin (`users
   previous deployment (old code + owner `DATABASE_URL`); that stays valid because owner inserts
   still default to AUK and the owner bypasses RLS. Reverting only the env var is NOT enough: the new
   code refuses to start without it.
+
+### Multi-tenancy follow-ups (commit 4)
+
+- **User management authz** (`src/lib/authz.ts`, `api/users`, `api/users/[id]`): create/edit/delete require
+  `users.role = 'admin'` or a platform admin, read fresh from the DB (not the JWT) so demotion/deactivation
+  bites immediately. Org admins act only on their own org (checked in code *and* by RLS); platform admins
+  cross orgs. Nobody can set `is_platform_admin` or `organization_id` through the API (403), nobody can change
+  their own role, deactivate or delete themselves, and only platform admins may modify a platform-admin account
+  (else an org admin in the same org could reset its password and take it over). Non-admin => 403; an
+  out-of-org target looks like 404. `users-admin.tsx` now checks `res.ok` (it used to render an error body as a saved user).
+- **`/api/*` without a session returns 401 JSON** (proxy); pages still redirect to `/login`.
+- **`api/alerts` removed**: nothing called it, `alert_log` never existed in the DB, and it interpolated request
+  fields into email HTML. If deficiency alerting is wanted later, build it with an `alert_log` table that has
+  `organization_id` + RLS like the other tenant tables. `ALERT_EMAIL` is now unused.
+- `db/schema.sql` builds from scratch with no manual step (verified by applying it to a fresh PGlite database):
+  helper functions precede first use and AUK is seeded with its fixed id. Migration 005 had a `GRANT ... TO ship_app`
+  before `CREATE ROLE ship_app` (invisible on the live DB where the role existed); fixed in both files.
+- `scripts/e2e-tenancy.mjs` (Playwright devDependency) — cross-tenant, role and session checks. Writes to the live DB
+  (dev and prod share one Neon DB), so it needs `E2E_CONFIRM=writes-to-live-db`, and `E2E_ALLOW_REMOTE=1` for a
+  non-localhost `BASE_URL`; cleans up its throwaway org in a `finally`.
+- Production upload test (2026-10-08): session required, blob stored at `<organization_id>/<filename>`,
+  `attachments` row saved and returned by `GET /api/inspections/[id]`; test blob and rows deleted afterwards.

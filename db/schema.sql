@@ -40,17 +40,29 @@ CREATE TYPE answer_kind AS ENUM (
 
 CREATE TYPE inspection_status AS ENUM ('DRAFT', 'IN_PROGRESS', 'COMPLETED', 'ISSUED');
 
+-- ---------- REQUEST CONTEXT HELPERS (used by column defaults + RLS policies) ----
+-- Defined first because organization_id column defaults call app_org_id(). Both read
+-- transaction-local settings that src/lib/db.ts sets from the verified JWT on every query.
+CREATE OR REPLACE FUNCTION app_org_id() RETURNS uuid
+  LANGUAGE sql STABLE AS $$ SELECT NULLIF(current_setting('app.org_id', true), '')::uuid $$;
+
+CREATE OR REPLACE FUNCTION app_is_platform_admin() RETURNS boolean
+  LANGUAGE sql STABLE AS $$ SELECT COALESCE(NULLIF(current_setting('app.is_platform_admin', true), '')::boolean, false) $$;
+
 -- ---------- 0. ORGANIZATIONS (multi-tenancy; see migration 004) ----------
 -- AUK is both a tenant and the platform administrator. Every tenant-scoped table
 -- below carries organization_id, defaulting (migration 007) to the caller's org
--- (app_org_id()), else AUK's id for owner/migration inserts. The UUID is the live
--- AUK row; a fresh DB must create AUK first and substitute its id. app_org_id()
--- is defined in the RLS section at the bottom of this file (create it first).
+-- (app_org_id()), else AUK's id for owner/migration inserts. AUK is seeded right
+-- below with that exact id; app_org_id() is defined just above.
 CREATE TABLE organizations (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name       TEXT NOT NULL UNIQUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- AUK is both a tenant and the platform administrator, and every organization_id column
+-- defaults to it for owner/migration inserts, so it must exist with this exact id.
+INSERT INTO organizations (id, name) VALUES ('743a27f6-4b1b-4eb6-b13b-9907deb5cbb3', 'AUK');
 
 -- ---------- 1. VESSELS -----------------------------------------------
 CREATE TABLE vessels (
@@ -317,11 +329,7 @@ CREATE INDEX idx_users_org ON users(organization_id);
 -- ---------- ROW LEVEL SECURITY (migration 005) -------------------------
 -- App must connect as `ship_app` (NOBYPASSRLS, non-owner); neondb_owner bypasses RLS.
 -- Password for ship_app is set out-of-band, not stored here.
-CREATE OR REPLACE FUNCTION app_org_id() RETURNS uuid
-  LANGUAGE sql STABLE AS $$ SELECT NULLIF(current_setting('app.org_id', true), '')::uuid $$;
-
-CREATE OR REPLACE FUNCTION app_is_platform_admin() RETURNS boolean
-  LANGUAGE sql STABLE AS $$ SELECT COALESCE(NULLIF(current_setting('app.is_platform_admin', true), '')::boolean, false) $$;
+-- (app_org_id() / app_is_platform_admin() are defined near the top of this file, before first use.)
 
 DO $$
 DECLARE t TEXT;
@@ -354,7 +362,7 @@ CREATE OR REPLACE FUNCTION auth_set_password(p_user_id UUID, p_hash TEXT)
 $$;
 
 REVOKE ALL ON FUNCTION auth_find_user(TEXT, BOOLEAN), auth_set_password(UUID, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth_find_user(TEXT, BOOLEAN), auth_set_password(UUID, TEXT) TO ship_app;
+-- (EXECUTE is granted to ship_app at the end of this file, after the role exists.)
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ship_app') THEN

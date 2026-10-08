@@ -9,21 +9,25 @@ export default function UsersAdmin({ users: initial }: { users: User[] }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<User|null>(null);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string|null>(null);
   const [form, setForm] = useState({ email:"", full_name:"", role:"inspector", password:"", is_active:true });
 
   function openAdd() {
     setEditing(null);
+    setError(null);
     setForm({ email:"", full_name:"", role:"inspector", password:"", is_active:true });
     setShowForm(true);
   }
   function openEdit(u: User) {
     setEditing(u);
+    setError(null);
     setForm({ email:u.email, full_name:u.full_name, role:u.role, password:"", is_active:u.is_active });
     setShowForm(true);
   }
 
   async function saveUser() {
     setSaving(true);
+    setError(null);
     try {
       const method = editing ? "PUT" : "POST";
       const url    = editing ? `/api/users/${editing.id}` : "/api/users";
@@ -31,7 +35,8 @@ export default function UsersAdmin({ users: initial }: { users: User[] }) {
         ? { full_name:form.full_name, role:form.role, is_active:form.is_active, ...(form.password ? {password:form.password} : {}) }
         : form;
       const res = await fetch(url, { method, headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
-      const saved = await res.json();
+      const saved = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(saved?.error ?? `Save failed (${res.status})`); return; }
       if (editing) { setUsers(prev => prev.map(u => u.id===saved.id||u.id===editing.id ? {...u,...saved} : u)); }
       else { setUsers(prev => [...prev, saved]); }
       setShowForm(false);
@@ -40,7 +45,8 @@ export default function UsersAdmin({ users: initial }: { users: User[] }) {
 
   async function deleteUser(id: string) {
     if (!confirm("Delete this user?")) return;
-    await fetch(`/api/users/${id}`, { method:"DELETE" });
+    const res = await fetch(`/api/users/${id}`, { method:"DELETE" });
+    if (!res.ok) { const b = await res.json().catch(() => ({})); alert(b?.error ?? `Delete failed (${res.status})`); return; }
     setUsers(prev => prev.filter(u => u.id!==id));
   }
 
@@ -59,7 +65,7 @@ export default function UsersAdmin({ users: initial }: { users: User[] }) {
           {users.length === 0 ? (
             <div style={{ padding:"3rem", textAlign:"center", color:"#9CA3AF", fontSize:15 }}>
               No users yet. Add users above.
-              <br/><span style={{ fontSize:13, marginTop:6, display:"block" }}>The existing admin login (env vars) still works even with no users in the database.</span>
+              <br/><span style={{ fontSize:13, marginTop:6, display:"block" }}>Only organization admins and platform admins can add or edit users.</span>
             </div>
           ) : (
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:15 }}>
@@ -134,6 +140,7 @@ export default function UsersAdmin({ users: initial }: { users: User[] }) {
                 Active
               </label>
             )}
+            {error && <p role="alert" style={{ color:"#DC2626", fontSize:14, margin:"0 0 10px" }}>{error}</p>}
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
               <button onClick={() => setShowForm(false)} style={{ padding:"8px 18px", background:"#F3F4F6", border:"none", borderRadius:7, fontSize:15, cursor:"pointer" }}>Cancel</button>
               <button onClick={saveUser} disabled={saving} style={{ padding:"8px 20px", background:NAV, color:"#fff", border:"none", borderRadius:7, fontSize:15, fontWeight:500, cursor:"pointer" }}>

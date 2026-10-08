@@ -21,17 +21,23 @@ export async function proxy(req: NextRequest) {
     return res;
   }
 
+  // Pages redirect to /login; API calls get a real 401 JSON (a redirect to an HTML login page
+  // is useless to fetch() callers and hid that the route was never reached).
+  const isApi = pathname.startsWith("/api/");
+  const unauthenticated = () =>
+    isApi
+      ? NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      : NextResponse.redirect(new URL("/login", req.url));
+
   const token = req.cookies.get(SESSION_COOKIE)?.value;
-  if (!token) {
-    return NextResponse.redirect(new URL("/login", req.url));
-  }
+  if (!token) return unauthenticated();
 
   // Signature + expiry + tenant claims. Legacy sessions (no organization_id) fail here and
   // are sent back to /login to get a token that carries the claims RLS needs.
   if (await verifySession(token)) return res;
-  const redirect = NextResponse.redirect(new URL("/login", req.url));
-  redirect.cookies.set(SESSION_COOKIE, "", { maxAge: 0, path: "/" });
-  return redirect;
+  const denied = unauthenticated();
+  denied.cookies.set(SESSION_COOKIE, "", { maxAge: 0, path: "/" });
+  return denied;
 }
 
 export const config = {

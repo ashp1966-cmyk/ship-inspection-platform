@@ -52,7 +52,7 @@ $$;
 -- SECURITY DEFINER hygiene: search_path pinned to `public, pg_temp` above (pg_temp last
 -- so a caller can't shadow objects via temp schema); EXECUTE only for ship_app + owner.
 REVOKE ALL ON FUNCTION auth_find_user(TEXT, BOOLEAN), auth_set_password(UUID, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth_find_user(TEXT, BOOLEAN), auth_set_password(UUID, TEXT) TO ship_app;
+-- (EXECUTE is granted to ship_app at the end of this file, after the role exists.)
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ship_app') THEN
