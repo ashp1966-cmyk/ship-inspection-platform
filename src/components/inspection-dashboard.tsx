@@ -78,6 +78,10 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
   const [vesselType, setVesselType] = useState<VesselType>("BULK_CARRIER");
   const [selectedVessel, setSelectedVessel] = useState<string>("");
   const [inspectorName, setInspectorName] = useState("");
+  // Vessel Name + IMO Number are required to save; linking an existing vessel
+  // (selectedVessel) is optional and just prefills them.
+  const [vesselName, setVesselName] = useState("");
+  const [imoNumber, setImoNumber] = useState("");
   const [answers, setAnswers]     = useState<Record<string, string>>({});
   const [remarks, setRemarks]     = useState<Record<string, string>>({});
   const [attachments, setAttachments] = useState<Record<string, Attachment[]>>({});
@@ -291,6 +295,10 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
   }
 
   async function saveInspection(type: DefectInspType) {
+    if (!vesselName.trim() || !imoNumber.trim()) {
+      setSaveError("Vessel Name and IMO Number are required.");
+      return;
+    }
     setSaving(true); setSaveError("");
     try {
       const res = await fetch("/api/inspections", {
@@ -298,6 +306,7 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
         headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
           vesselId: selectedVessel || null,
+          vesselName: vesselName.trim(), imoNumber: imoNumber.trim(),
           vesselType, inspectionType: type,
           answers, questionMeta: buildQuestionMeta(type), remarks, attachments,
           inventory: type==="PRE_PURCHASE" ? inventory : undefined,
@@ -744,11 +753,21 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
         </div>
         <div className="flex gap-3 flex-wrap">
           {/* Vessel selector */}
-          <select value={selectedVessel} onChange={e=>setSelectedVessel(e.target.value)}
+          <select value={selectedVessel} onChange={e=>{
+              const id = e.target.value;
+              setSelectedVessel(id);
+              const v = vessels.find(x => x.id === id);
+              if (v) { setVesselName(v.name); setImoNumber(v.imo_number); }
+            }}
             style={{ padding:"7px 12px", border:"1px solid #D1D5DB", borderRadius:7, fontSize:15, minWidth:180 }}>
             <option value="">Select vessel (optional)</option>
             {vessels.map(v=><option key={v.id} value={v.id}>{v.name} — {v.imo_number}</option>)}
           </select>
+          {/* Vessel name + IMO — required */}
+          <Input placeholder="Vessel name *" aria-label="Vessel name" aria-required required value={vesselName}
+            onChange={e=>setVesselName(e.target.value)} className="w-52" />
+          <Input placeholder="IMO number *" aria-label="IMO number" aria-required required value={imoNumber}
+            onChange={e=>setImoNumber(e.target.value)} className="w-40" />
           {/* Vessel type */}
           <Select value={vesselType} onValueChange={v=>handleVesselType(v as VesselType)}>
             <SelectTrigger className="w-52" aria-label="Vessel type"><SelectValue /></SelectTrigger>

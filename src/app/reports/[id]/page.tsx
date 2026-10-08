@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 export default async function ReportPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
   const [inspection] = await sql`
-    SELECT i.*, v.name AS vessel_name, v.vessel_type, v.imo_number,
+    SELECT i.*, COALESCE(v.name, i.entered_vessel_name) AS vessel_name, v.vessel_type, COALESCE(v.imo_number, i.entered_imo_number) AS imo_number,
            v.flag, v.class_society, v.dwt, v.gt,
            v.main_engine_make, v.main_engine_model
     FROM inspections i LEFT JOIN vessels v ON v.id=i.vessel_id

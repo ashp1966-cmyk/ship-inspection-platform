@@ -444,3 +444,18 @@ saved through the same `POST /api/inspections` — no route changes.
   mirrored in `db/schema.sql`).
 - Known pre-existing issue, not RightShip-specific: `inspections.vessel_id` is NOT NULL in the live
   DB, so saving any tab without a selected vessel returns 500 even though the UI says "optional".
+
+## Inspections: vessel link is optional; Vessel Name + IMO Number are the required fields
+
+`inspections.vessel_id` is nullable (migration `db/migrations/002_inspections_vessel_id_nullable.sql`,
+applied to live Neon; it was NOT NULL before, so every save without a selected vessel 500'd despite
+the UI saying "optional"). The typed identity lives on the inspection itself in
+`entered_vessel_name` / `entered_imo_number`. Required at both layers: `saveInspection()` in
+`inspection-dashboard.tsx` blocks blank name/IMO client-side (selecting a vessel prefills them),
+and `POST /api/inspections` returns 400 if either is blank. Readers show
+`COALESCE(v.name, i.entered_vessel_name)` / `COALESCE(v.imo_number, i.entered_imo_number)` and must
+`LEFT JOIN vessels` (the dashboard's two inner JOINs were changed so unlinked inspections don't vanish).
+
+Still broken, pre-existing and unrelated: `GET /inspections/[id]` and `GET /api/inspections/[id]`
+500 for every inspection because the `section_scores` table was never created (same recurring
+"code references a table that doesn't exist" pattern as `attachments`/`users`).

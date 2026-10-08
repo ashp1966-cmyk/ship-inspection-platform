@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     }
 
     const [insp] = await sql`
-      SELECT i.*, v.name AS vessel_name, v.vessel_type, v.imo_number,
+      SELECT i.*, COALESCE(v.name, i.entered_vessel_name) AS vessel_name, v.vessel_type, COALESCE(v.imo_number, i.entered_imo_number) AS imo_number,
              v.flag, v.class_society, v.dwt
       FROM inspections i LEFT JOIN vessels v ON v.id = i.vessel_id
       WHERE i.id = ${inspectionId}

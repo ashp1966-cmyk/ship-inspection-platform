@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export default async function NarrativePage() {
   const inspections = await sql`
-    SELECT i.id, v.name AS vessel_name, v.vessel_type, i.inspection_type,
+    SELECT i.id, COALESCE(v.name, i.entered_vessel_name) AS vessel_name, v.vessel_type, i.inspection_type,
            i.status, i.started_at, i.created_at, i.executive_summary,
            COUNT(ii.id)::int AS total_items
     FROM inspections i

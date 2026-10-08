@@ -91,7 +91,9 @@ CREATE TABLE template_questions (
 -- ---------- 3. INSPECTIONS --------------------------------------------
 CREATE TABLE inspections (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  vessel_id       UUID NOT NULL REFERENCES vessels(id) ON DELETE CASCADE,
+  vessel_id       UUID REFERENCES vessels(id) ON DELETE CASCADE,  -- optional link; see migration 002
+  entered_vessel_name TEXT,                     -- typed Vessel Name (required by the app)
+  entered_imo_number  TEXT,                     -- typed IMO Number (required by the app)
   inspection_type inspection_type NOT NULL,
   status          inspection_status NOT NULL DEFAULT 'DRAFT',
   inspector_name  TEXT,

@@ -5,15 +5,23 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const {
-      vesselId, vesselType, inspectionType,
+      vesselId, vesselName, imoNumber, vesselType, inspectionType,
       answers, questionMeta, remarks, attachments,
       inventory, projection, sparesCheck, defects,
     } = body;
 
+    // Vessel Name and IMO Number are the only required vessel fields; vesselId
+    // (a link to an existing vessels row) is optional and may be null.
+    const enteredName = typeof vesselName === "string" ? vesselName.trim() : "";
+    const enteredImo  = typeof imoNumber === "string" ? imoNumber.trim() : "";
+    if (!enteredName || !enteredImo) {
+      return NextResponse.json({ error: "Vessel Name and IMO Number are required." }, { status: 400 });
+    }
+
     // 1. Create inspection record
     const [inspection] = await sql`
-      INSERT INTO inspections (vessel_id, inspection_type, status, started_at)
-      VALUES (${vesselId ?? null}, ${inspectionType}, 'IN_PROGRESS', CURRENT_DATE)
+      INSERT INTO inspections (vessel_id, entered_vessel_name, entered_imo_number, inspection_type, status, started_at)
+      VALUES (${vesselId || null}, ${enteredName}, ${enteredImo}, ${inspectionType}, 'IN_PROGRESS', CURRENT_DATE)
       RETURNING id
     ` as any[];
 
@@ -155,7 +163,7 @@ export async function POST(req: Request) {
 
 export async function GET() {
   const rows = await sql`
-    SELECT i.id, v.name AS vessel_name, v.vessel_type,
+    SELECT i.id, COALESCE(v.name, i.entered_vessel_name) AS vessel_name, v.vessel_type,
            i.inspection_type, i.status, i.inspector_name,
            i.started_at, i.overall_grade, i.created_at
     FROM inspections i

@@ -22,22 +22,22 @@ export default async function Page() {
   };
 
   const recentInspections = await sql`
-    SELECT i.id, v.name AS vessel_name, v.vessel_type,
+    SELECT i.id, COALESCE(v.name, i.entered_vessel_name) AS vessel_name, v.vessel_type,
            i.inspection_type, i.status, i.inspector_name,
            i.started_at, i.overall_grade, i.created_at
     FROM inspections i
-    JOIN vessels v ON v.id = i.vessel_id
+    LEFT JOIN vessels v ON v.id = i.vessel_id
     ORDER BY i.created_at DESC LIMIT 10
   `;
 
   const deficiencies = await sql`
     SELECT ii.id, ii.prompt, ii.section_code, ii.grade_value,
            ii.deficiency_status, ii.deficiency_action, ii.remarks,
-           v.name AS vessel_name, v.vessel_type,
+           COALESCE(v.name, i.entered_vessel_name) AS vessel_name, v.vessel_type,
            i.started_at, i.inspection_type
     FROM inspection_items ii
     JOIN inspections i ON i.id = ii.inspection_id
-    JOIN vessels v ON v.id = i.vessel_id
+    LEFT JOIN vessels v ON v.id = i.vessel_id
     WHERE ii.grade_value IN ('POOR','ACTION_REQUIRED')
     ORDER BY
       CASE ii.deficiency_status WHEN 'OPEN' THEN 0 WHEN 'IN_PROGRESS' THEN 1 ELSE 2 END,
