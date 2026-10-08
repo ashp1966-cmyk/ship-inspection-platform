@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { imoError } from "@/lib/imo";
 
 export async function POST(req: Request) {
   try {
@@ -16,6 +17,10 @@ export async function POST(req: Request) {
     const enteredImo  = typeof imoNumber === "string" ? imoNumber.trim() : "";
     if (!enteredName || !enteredImo) {
       return NextResponse.json({ error: "Vessel Name and IMO Number are required." }, { status: 400 });
+    }
+    const imoProblem = imoError(enteredImo);
+    if (imoProblem) {
+      return NextResponse.json({ error: imoProblem }, { status: 400 });
     }
 
     // 1. Create inspection record

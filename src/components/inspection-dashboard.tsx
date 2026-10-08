@@ -15,6 +15,7 @@ import {
 } from "@/lib/inspection-templates";
 import { projectFleet, usd, HORIZON_YEARS } from "@/lib/capex";
 import { cn } from "@/lib/utils";
+import { imoError } from "@/lib/imo";
 import sparesSpec from "../../db/random_spares_check_spec.json";
 
 interface Attachment { name:string; url:string; fileType:"photo"|"document"; size:number; uploading?:boolean; }
@@ -82,6 +83,9 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
   // (selectedVessel) is optional and just prefills them.
   const [vesselName, setVesselName] = useState("");
   const [imoNumber, setImoNumber] = useState("");
+  // Inline only — shown while typing, never blocks input. Empty is handled by
+  // the required-field check on save, so don't nag before anything is typed.
+  const imoProblem = imoNumber.trim() ? imoError(imoNumber.trim()) : null;
   const [answers, setAnswers]     = useState<Record<string, string>>({});
   const [remarks, setRemarks]     = useState<Record<string, string>>({});
   const [attachments, setAttachments] = useState<Record<string, Attachment[]>>({});
@@ -299,6 +303,7 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
       setSaveError("Vessel Name and IMO Number are required.");
       return;
     }
+    if (imoProblem) { setSaveError(imoProblem); return; }
     setSaving(true); setSaveError("");
     try {
       const res = await fetch("/api/inspections", {
@@ -766,8 +771,12 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
           {/* Vessel name + IMO — required */}
           <Input placeholder="Vessel name *" aria-label="Vessel name" aria-required required value={vesselName}
             onChange={e=>setVesselName(e.target.value)} className="w-52" />
-          <Input placeholder="IMO number *" aria-label="IMO number" aria-required required value={imoNumber}
-            onChange={e=>setImoNumber(e.target.value)} className="w-40" />
+          <div className="w-40">
+            <Input placeholder="IMO number *" aria-label="IMO number" aria-required required value={imoNumber}
+              aria-invalid={!!imoProblem} aria-describedby={imoProblem ? "imo-error" : undefined}
+              onChange={e=>setImoNumber(e.target.value)} />
+            {imoProblem && <p id="imo-error" className="mt-1 text-xs text-red-500" role="alert">{imoProblem}</p>}
+          </div>
           {/* Vessel type */}
           <Select value={vesselType} onValueChange={v=>handleVesselType(v as VesselType)}>
             <SelectTrigger className="w-52" aria-label="Vessel type"><SelectValue /></SelectTrigger>

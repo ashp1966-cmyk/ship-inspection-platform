@@ -452,7 +452,10 @@ applied to live Neon; it was NOT NULL before, so every save without a selected v
 the UI saying "optional"). The typed identity lives on the inspection itself in
 `entered_vessel_name` / `entered_imo_number`. Required at both layers: `saveInspection()` in
 `inspection-dashboard.tsx` blocks blank name/IMO client-side (selecting a vessel prefills them),
-and `POST /api/inspections` returns 400 if either is blank. Readers show
+and `POST /api/inspections` returns 400 if either is blank or the IMO is invalid (7 digits + check digit,
+`imoError()` in `src/lib/imo.ts`, shared by the route and the UI's inline message; the IMO is trimmed before
+validation/storage). Note `vessels.imo_number` itself is NOT validated, so a registered vessel with a bad
+IMO will be blocked at inspection-save until its IMO is corrected. Readers show
 `COALESCE(v.name, i.entered_vessel_name)` / `COALESCE(v.imo_number, i.entered_imo_number)` and must
 `LEFT JOIN vessels` (the dashboard's two inner JOINs were changed so unlinked inspections don't vanish).
 
