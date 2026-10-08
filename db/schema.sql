@@ -57,7 +57,7 @@ CREATE TABLE vessels (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
   name              TEXT NOT NULL,
-  imo_number        VARCHAR(10) UNIQUE NOT NULL,
+  imo_number        VARCHAR(10) NOT NULL,  -- unique per organization, see vessels_org_imo_key
   vessel_type       vessel_type NOT NULL,
   flag              TEXT,
   port_of_registry  TEXT,
@@ -304,6 +304,7 @@ CREATE TRIGGER trg_inspections_updated BEFORE UPDATE ON inspections      FOR EAC
 CREATE TRIGGER trg_items_updated       BEFORE UPDATE ON inspection_items FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE INDEX idx_vessels_org ON vessels(organization_id);
+CREATE UNIQUE INDEX vessels_org_imo_key ON vessels (organization_id, imo_number);  -- migration 006
 CREATE INDEX idx_inspections_org ON inspections(organization_id);
 CREATE INDEX idx_inspection_items_org ON inspection_items(organization_id);
 CREATE INDEX idx_attachments_org ON attachments(organization_id);
@@ -312,3 +313,61 @@ CREATE INDEX idx_section_scores_org ON section_scores(organization_id);
 CREATE INDEX idx_capex_projections_org ON capex_projections(organization_id);
 CREATE INDEX idx_vessel_specific_fields_org ON vessel_specific_fields(organization_id);
 CREATE INDEX idx_users_org ON users(organization_id);
+
+-- ---------- ROW LEVEL SECURITY (migration 005) -------------------------
+-- App must connect as `ship_app` (NOBYPASSRLS, non-owner); neondb_owner bypasses RLS.
+-- Password for ship_app is set out-of-band, not stored here.
+CREATE OR REPLACE FUNCTION app_org_id() RETURNS uuid
+  LANGUAGE sql STABLE AS $$ SELECT NULLIF(current_setting('app.org_id', true), '')::uuid $$;
+
+CREATE OR REPLACE FUNCTION app_is_platform_admin() RETURNS boolean
+  LANGUAGE sql STABLE AS $$ SELECT COALESCE(NULLIF(current_setting('app.is_platform_admin', true), '')::boolean, false) $$;
+
+DO $$
+DECLARE t TEXT;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    'vessels','inspections','inspection_items','attachments',
+    'random_spares_check_items','section_scores','capex_projections',
+    'vessel_specific_fields','users'
+  ] LOOP
+    EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+    EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
+    -- FOR ALL with only USING: Postgres reuses it as WITH CHECK, so a tenant also
+    -- cannot INSERT/UPDATE a row into another organization.
+    EXECUTE format(
+      'CREATE POLICY tenant_isolation ON %I USING (organization_id = app_org_id() OR app_is_platform_admin())', t);
+  END LOOP;
+END $$;
+
+-- Login / forgot-password / reset-password run BEFORE any org is known, so they can't
+-- read `users` under RLS. These SECURITY DEFINER functions (run as the owner, which
+-- bypasses RLS) are the only sanctioned way to do that pre-auth lookup.
+CREATE OR REPLACE FUNCTION auth_find_user(p_email TEXT, p_active_only BOOLEAN DEFAULT true)
+  RETURNS SETOF users LANGUAGE sql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT * FROM users WHERE email = p_email AND (NOT p_active_only OR is_active)
+$$;
+
+CREATE OR REPLACE FUNCTION auth_set_password(p_user_id UUID, p_hash TEXT)
+  RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  UPDATE users SET password_hash = p_hash, updated_at = now() WHERE id = p_user_id
+$$;
+
+REVOKE ALL ON FUNCTION auth_find_user(TEXT, BOOLEAN), auth_set_password(UUID, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION auth_find_user(TEXT, BOOLEAN), auth_set_password(UUID, TEXT) TO ship_app;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ship_app') THEN
+    CREATE ROLE ship_app LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+  END IF;
+END $$;
+
+GRANT USAGE ON SCHEMA public TO ship_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON
+  vessels, inspections, inspection_items, attachments, random_spares_check_items,
+  section_scores, capex_projections, vessel_specific_fields, users,
+  password_reset_tokens, organizations TO ship_app;
+GRANT SELECT ON template_sections, template_questions TO ship_app;
+GRANT EXECUTE ON FUNCTION app_org_id(), app_is_platform_admin(),
+  auth_find_user(TEXT, BOOLEAN), auth_set_password(UUID, TEXT) TO ship_app;
+

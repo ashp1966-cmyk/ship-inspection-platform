@@ -472,3 +472,15 @@ inspection-manager reader; `UNIQUE (inspection_id, section_code)` is required by
 management_score`, which didn't exist either (and `/vessels/[id]` selects `overall_score`), so
 migration `db/migrations/003_section_scores_and_inspection_scores.sql` adds all of it (scores are
 `Math.round`ed 0–100 integers from `src/lib/grading.ts`).
+
+## Multi-tenancy (in progress — migrations 004–006)
+
+- `organizations` + `organization_id` on every tenant table (migration 004); RLS `tenant_isolation`
+  policies keyed on `app.org_id` / `app.is_platform_admin` (005); `vessels` IMO unique per org (006).
+- The app role must be `ship_app` (`DATABASE_URL_APP`), not `neondb_owner` — the owner has BYPASSRLS
+  and owns the tables, so RLS never applies to it. Owner connection is for migrations only.
+- Pre-login lookups go through `auth_find_user()` / `auth_set_password()` (SECURITY DEFINER).
+- **One-off, not in any migration file:** `UPDATE users SET is_platform_admin = true WHERE
+  email = 'ashp1966@gmail.com'` was run directly against live Neon (2026-10-08). A fresh DB
+  restored from `db/` alone will have no platform admin until that is repeated deliberately.
+- `scripts/rls-test.mjs` verifies the policies (always ROLLBACKs; safe on the live DB).
