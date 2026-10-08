@@ -1,4 +1,5 @@
 import technicalChecklist from "../../db/technical_inspection_checklist.json";
+import rightshipChecklist from "../../db/rightship_preparation_checklist.json";
 
 export const VESSEL_TYPES = [
   { value:"BULK_CARRIER",   label:"Bulk Carrier" },
@@ -19,7 +20,13 @@ export const GRADES: { value:Grade; label:string; tone:string }[] = [
   { value:"NOT_SEEN",       label:"Not Seen",        tone:"bg-slate-100 text-slate-600" },
   { value:"NA",             label:"N/A",             tone:"bg-gray-100 text-gray-500" },
 ];
-export interface Question { id:string; prompt:string; answerKind:"GRADE"|"YES_NO"|"TEXT"|"NUMBER"|"DATE"; custom?:boolean; }
+export interface Question {
+  id:string; prompt:string; answerKind:"GRADE"|"YES_NO"|"TEXT"|"NUMBER"|"DATE"|"CHOICE"; custom?:boolean;
+  // CHOICE only (RightShip): the dropdown options, stored verbatim as text.
+  options?:string[];
+  // RightShip RISQ metadata: inspector help text, (M)andatory and (V)erify flags.
+  guide?:string; mandatory?:boolean; verify?:boolean;
+}
 export interface Section { code:string; title:string; vesselType:VesselType|null; questions:Question[]; }
 export interface EquipmentItem {
   id:string; sectionCode:string; equipmentName:string; equipmentModel:string; equipmentSerial:string;
@@ -616,6 +623,44 @@ export function getTechnicalSections(): Section[] {
       id: it.code,
       prompt: it.location ? `${it.question} (${it.location})` : it.question,
       answerKind: "GRADE" as const,
+    })),
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// RIGHTSHIP PREPARATION — RISQ v3.2 (RightShip Inspection Ship
+// Questionnaire), 550 questions in 26 sections/sub-sections (1–17,
+// including 7A–7D, 8A–8F, 9A/9B), imported from
+// db/rightship_preparation_checklist.json.
+// ─────────────────────────────────────────────────────────────────────
+interface RightShipQuestion {
+  id: string;
+  text: string;
+  answer_type: "text" | "yesno" | "select";
+  options?: string[];
+  mandatory?: boolean;
+  verify?: boolean;
+  guide?: string;
+}
+interface RightShipSection { section: string; title: string; questions: RightShipQuestion[]; }
+
+export function getRightShipSections(): Section[] {
+  const sections = (rightshipChecklist as { sections: RightShipSection[] }).sections;
+  return sections.map((s) => ({
+    code: `RS_${s.section}`,
+    title: `${s.section}. ${s.title}`,
+    vesselType: null,
+    questions: s.questions.map((it): Question => ({
+      // RISQ numbers restart inside lettered sub-sections (7B starts at 7.1),
+      // so the section is part of the id. "RS7B-7.1" also makes the API's
+      // qId.split("-")[0] section_code derivation yield "RS7B".
+      id: `RS${s.section}-${it.id}`,
+      prompt: it.text,
+      answerKind: it.answer_type === "text" ? "TEXT" : "CHOICE",
+      options: it.options,
+      guide: it.guide,
+      mandatory: it.mandatory,
+      verify: it.verify,
     })),
   }));
 }

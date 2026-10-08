@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   VESSEL_TYPES, GRADES, getConditionSections, getPrePurchaseSections, getPrePurchaseInventory,
-  getTechnicalSections,
+  getTechnicalSections, getRightShipSections,
   type VesselType, type Grade, type Question, type EquipmentItem, type Section,
 } from "@/lib/inspection-templates";
 import { projectFleet, usd, HORIZON_YEARS } from "@/lib/capex";
@@ -41,7 +41,7 @@ const DEFECT_TYPES = [
   "Safety", "Fire", "Environment", "Structural", "Machinery",
   "Navigation", "Pollution Prevention", "Regulatory/Documentation", "Other",
 ];
-type DefectInspType = "CONDITION" | "PRE_PURCHASE" | "TECHNICAL";
+type DefectInspType = "CONDITION" | "PRE_PURCHASE" | "TECHNICAL" | "RIGHTSHIP";
 type DefectRow = { rowKey:string; description:string; defectType:string; remarks:string };
 const blankDefectRow = (): DefectRow => ({
   rowKey: `def-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -111,7 +111,7 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
   }
 
   const [defectRows, setDefectRows] = useState<Record<DefectInspType, DefectRow[]>>({
-    CONDITION: [], PRE_PURCHASE: [], TECHNICAL: [],
+    CONDITION: [], PRE_PURCHASE: [], TECHNICAL: [], RIGHTSHIP: [],
   });
 
   function addDefectRow(type: DefectInspType) {
@@ -162,6 +162,16 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
     [technicalSections]
   );
 
+  // RightShip Preparation: RISQ v3.2, one pill/accordion per RISQ section.
+  const rightshipSections = useMemo(() => {
+    const base = getRightShipSections();
+    return base.map(s => ({ ...s, questions: [...s.questions, ...(customSections[s.code]??[])] }));
+  }, [customSections]);
+  const rightshipGroups = useMemo(
+    () => rightshipSections.map(s => ({ key: s.code, label: s.title, sections: [s] })),
+    [rightshipSections]
+  );
+
   const [conditionGroupKey, setConditionGroupKey] = useState<string>("general");
   const [prePurchaseGroupKey, setPrePurchaseGroupKey] = useState<string>("general");
   const [technicalGroupKey, setTechnicalGroupKey] = useState<string>(technicalGroups[0]?.key ?? "");
@@ -170,6 +180,8 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
   const activePrePurchaseGroup = prePurchaseGroupKey === "equipment"
     ? null
     : prePurchaseGroups.find(g => g.key === prePurchaseGroupKey) ?? prePurchaseGroups[0];
+  const [rightshipGroupKey, setRightshipGroupKey] = useState<string>(rightshipGroups[0]?.key ?? "");
+  const activeRightshipGroup = rightshipGroups.find(g => g.key === rightshipGroupKey) ?? rightshipGroups[0];
   const activeTechnicalGroup = technicalGroups.find(g => g.key === technicalGroupKey) ?? technicalGroups[0];
 
   function handleVesselType(v: VesselType) {
@@ -266,10 +278,11 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
     setTimeout(() => fileInputRef.current?.click(), 50);
   }
 
-  function buildQuestionMeta(type: "CONDITION"|"PRE_PURCHASE"|"TECHNICAL"): Record<string, string> {
+  function buildQuestionMeta(type: DefectInspType): Record<string, string> {
     const meta: Record<string, string> = {};
     const sections = type === "PRE_PURCHASE" ? prePurchaseSections
       : type === "TECHNICAL" ? technicalSections
+      : type === "RIGHTSHIP" ? rightshipSections
       : conditionSections;
     for (const s of sections) {
       for (const q of s.questions) meta[q.id] = q.answerKind;
@@ -277,7 +290,7 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
     return meta;
   }
 
-  async function saveInspection(type: "CONDITION"|"PRE_PURCHASE"|"TECHNICAL") {
+  async function saveInspection(type: DefectInspType) {
     setSaving(true); setSaveError("");
     try {
       const res = await fetch("/api/inspections", {
@@ -323,7 +336,12 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
               <span style={{ fontSize:15, lineHeight:1.5, color:"#374151" }}>
                 {q.prompt}
                 {q.custom && <span style={{ marginLeft:6, fontSize:12, color:"#3B82F6", fontWeight:500 }}>CUSTOM</span>}
+                {q.mandatory && <span title="Mandatory (M)" style={{ marginLeft:6, fontSize:12, color:"#DC2626", fontWeight:600 }}>M</span>}
+                {q.verify && <span title="Verify (V)" style={{ marginLeft:4, fontSize:12, color:"#0369A1", fontWeight:600 }}>V</span>}
               </span>
+            )}
+            {!isEditing && q.guide && (
+              <div style={{ fontSize:13, lineHeight:1.4, color:"#6B7280", marginTop:2 }}>{q.guide}</div>
             )}
           </div>
 
@@ -359,6 +377,11 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
                   <SelectItem value="NO">No</SelectItem>
                   <SelectItem value="NA">N/A</SelectItem>
                 </SelectContent>
+              </Select>
+            ) : q.answerKind==="CHOICE" ? (
+              <Select value={answers[q.id]??""} onValueChange={v=>setAnswers(a=>({...a,[q.id]:v}))}>
+                <SelectTrigger id={q.id} className="h-8 text-sm"><SelectValue placeholder="Select" /></SelectTrigger>
+                <SelectContent>{(q.options??[]).map(o=><SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
               </Select>
             ) : (
               <Input id={q.id} type={q.answerKind==="DATE"?"date":q.answerKind==="NUMBER"?"number":"text"}
@@ -737,10 +760,11 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
       </div>
 
       <Tabs defaultValue="condition">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="condition">Condition Inspection</TabsTrigger>
           <TabsTrigger value="prepurchase">Pre-Purchase Inspection</TabsTrigger>
           <TabsTrigger value="technical">Technical Inspection</TabsTrigger>
+          <TabsTrigger value="rightship">RightShip Preparation</TabsTrigger>
         </TabsList>
 
         {/* CONDITION TAB */}
@@ -882,6 +906,24 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
           <div className="flex items-center gap-3 pt-2">
             <Button onClick={()=>saveInspection("TECHNICAL")} disabled={saving}>
               {saving ? "Saving…" : "Save technical inspection"}
+            </Button>
+            {saved && <span className="text-sm text-emerald-600">Saved ✓</span>}
+            {saveError && <span className="text-sm text-red-500">{saveError}</span>}
+          </div>
+        </TabsContent>
+
+        {/* RIGHTSHIP PREPARATION TAB */}
+        <TabsContent value="rightship" className="space-y-3 mt-4">
+          {renderGroupPills(
+            rightshipGroups, rightshipGroupKey, setRightshipGroupKey,
+            [{ key:"defect_list", label:"Defect List" }]
+          )}
+          {rightshipGroupKey === "defect_list"
+            ? renderDefectTable("RIGHTSHIP")
+            : activeRightshipGroup && renderSectionAccordion(activeRightshipGroup.sections)}
+          <div className="flex items-center gap-3 pt-2">
+            <Button onClick={()=>saveInspection("RIGHTSHIP")} disabled={saving}>
+              {saving ? "Saving…" : "Save RightShip preparation"}
             </Button>
             {saved && <span className="text-sm text-emerald-600">Saved ✓</span>}
             {saveError && <span className="text-sm text-red-500">{saveError}</span>}

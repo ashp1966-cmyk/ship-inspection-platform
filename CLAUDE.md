@@ -424,3 +424,23 @@ restored immediately after the test so it still matches the documented `AUTH_PAS
 already queries actually exists — this is now the fourth+ time in this codebase that code assumed
 a table which was never created (see `attachments` above, and now `users`). A try/catch fallback
 can hide this for a long time, exactly as it did here.
+
+## RightShip Preparation (4th inspection tab)
+
+`RightShip Preparation` (`inspection_type = 'RIGHTSHIP'`) is the RISQ v3.2 questionnaire: 550
+questions in 26 sections (1–17 incl. 7A–7D, 8A–8F, 9A/9B), imported from
+`db/rightship_preparation_checklist.json` by `getRightShipSections()` in
+`src/lib/inspection-templates.ts`. Same wiring as Technical (pills + accordions + Defect List),
+saved through the same `POST /api/inspections` — no route changes.
+
+- Question ids are `RS{section}-{risqId}` (e.g. `RS7B-7.1`), because RISQ numbering restarts inside
+  lettered sub-sections (7B starts at 7.1). This also makes the route's `qId.split("-")[0]`
+  `section_code` come out as `RS7B`. Don't use bare RISQ ids.
+- New `answerKind: "CHOICE"` (with `options`) renders a Select and is stored verbatim in
+  `text_value`. RISQ yes/no questions use it (Yes/No/N/A/N/V) rather than `YES_NO`, because
+  `YES_NO` has no N/V and saves `bool_value = (v === "YES")`, which would collapse No/N/A/N/V.
+- `guide` renders as a muted caption under the question; `mandatory`/`verify` as small M / V marks.
+- Enum migration: `db/migrations/001_add_rightship_inspection_type.sql` (applied to live Neon;
+  mirrored in `db/schema.sql`).
+- Known pre-existing issue, not RightShip-specific: `inspections.vessel_id` is NOT NULL in the live
+  DB, so saving any tab without a selected vessel returns 500 even though the UI says "optional".
