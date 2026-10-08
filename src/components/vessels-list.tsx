@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { imoError } from "@/lib/imo";
 
 const VESSEL_TYPES: Record<string, string> = {
   BULK_CARRIER:"Bulk Carrier", CONTAINER_SHIP:"Container Ship",
@@ -52,13 +53,20 @@ export default function VesselsList({ vessels: initial }: { vessels: Vessel[] })
     setShowForm(true);
   }
 
+  // Inline only: shown while typing, never blocks input; blank is left to the save-time check.
+  const imoProblem = (form as any).imo_number?.trim() ? imoError((form as any).imo_number.trim()) : null;
+
   async function saveVessel() {
+    if (imoError(((form as any).imo_number ?? "").trim())) {
+      setSaveError(imoError(((form as any).imo_number ?? "").trim())!);
+      return;
+    }
     setSaving(true);
     setSaveError("");
     try {
       const method = editing ? "PUT" : "POST";
       const url    = editing ? `/api/vessels/${editing.id}` : "/api/vessels";
-      const res = await fetch(url, { method, headers:{"Content-Type":"application/json"}, body: JSON.stringify(form) });
+      const res = await fetch(url, { method, headers:{"Content-Type":"application/json"}, body: JSON.stringify({ ...form, imo_number: (form as any).imo_number.trim() }) });
       const saved = await res.json();
       if (!res.ok) throw new Error(saved.error ?? "Failed to save vessel.");
       if (editing) {
@@ -94,7 +102,11 @@ export default function VesselsList({ vessels: initial }: { vessels: Vessel[] })
         </select>
       ) : (
         <input type={type} value={(form as any)[key]} onChange={e => setForm(f => ({...f,[key]:e.target.value}))}
-          style={{ width:"100%", padding:"7px 10px", border:"1px solid #D1D5DB", borderRadius:6, fontSize:15 }} />
+          aria-invalid={key === "imo_number" && !!imoProblem}
+          style={{ width:"100%", padding:"7px 10px", border:`1px solid ${key === "imo_number" && imoProblem ? "#DC2626" : "#D1D5DB"}`, borderRadius:6, fontSize:15 }} />
+      )}
+      {key === "imo_number" && imoProblem && (
+        <p id="imo-error" role="alert" style={{ color:"#DC2626", fontSize:13, marginTop:3 }}>{imoProblem}</p>
       )}
     </div>
   );

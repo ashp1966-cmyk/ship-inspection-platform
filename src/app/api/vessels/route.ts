@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql, dateStr } from "@/lib/db";
+import { imoError } from "@/lib/imo";
 
 // Optional DATE/NUMERIC columns reject "" ("invalid input syntax for type
 // date/numeric") — the Vessels form leaves untouched fields as "", so blank
@@ -18,6 +19,9 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const b = await req.json();
+    const imoProblem = imoError(typeof b.imo_number === "string" ? b.imo_number.trim() : "");
+    if (imoProblem) return NextResponse.json({ error: imoProblem }, { status: 400 });
+    b.imo_number = b.imo_number.trim();
     const [v] = await sql`
       INSERT INTO vessels
         (name, imo_number, vessel_type, flag, port_of_registry,

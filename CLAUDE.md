@@ -455,7 +455,10 @@ the UI saying "optional"). The typed identity lives on the inspection itself in
 and `POST /api/inspections` returns 400 if either is blank or the IMO is invalid (7 digits + check digit,
 `imoError()` in `src/lib/imo.ts`, shared by the route and the UI's inline message; the IMO is trimmed before
 validation/storage). Note `vessels.imo_number` itself is NOT validated, so a registered vessel with a bad
-IMO will be blocked at inspection-save until its IMO is corrected. Readers show
+IMO will be blocked at inspection-save until its IMO is corrected. The Vessels form (`vessels-list.tsx`) and
+`POST /api/vessels` / `PUT /api/vessels/[id]` now enforce the same `imoError()` rule (inline message,
+client-side save block, 400), so new/edited vessels can't reach that state; vessels created before this check
+were not backfilled. Readers show
 `COALESCE(v.name, i.entered_vessel_name)` / `COALESCE(v.imo_number, i.entered_imo_number)` and must
 `LEFT JOIN vessels` (the dashboard's two inner JOINs were changed so unlinked inspections don't vanish).
 

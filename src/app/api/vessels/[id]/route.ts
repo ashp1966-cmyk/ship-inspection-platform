@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql, dateStr } from "@/lib/db";
+import { imoError } from "@/lib/imo";
 
 // See src/app/api/vessels/route.ts — "" must be coerced to null for
 // optional DATE/NUMERIC columns or the update throws.
@@ -20,6 +21,9 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
   try {
     const { id } = await props.params;
     const b = await req.json();
+    const imoProblem = imoError(typeof b.imo_number === "string" ? b.imo_number.trim() : "");
+    if (imoProblem) return NextResponse.json({ error: imoProblem }, { status: 400 });
+    b.imo_number = b.imo_number.trim();
     const [v] = await sql`
       UPDATE vessels SET
         name = ${b.name}, imo_number = ${b.imo_number},
