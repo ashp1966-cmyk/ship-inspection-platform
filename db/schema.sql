@@ -101,9 +101,26 @@ CREATE TABLE inspections (
   started_at      DATE,
   completed_at    DATE,
   overall_grade   grade,
+  overall_score    INTEGER,   -- 0-100, set by PATCH calculate_score
+  condition_score  INTEGER,
+  management_score INTEGER,
   executive_summary TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Per-section scores, written by PATCH /api/inspections/[id] calculate_score.
+CREATE TABLE section_scores (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  inspection_id    UUID NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
+  section_code     TEXT NOT NULL,
+  section_title    TEXT,
+  score            INTEGER NOT NULL DEFAULT 0,
+  total_items      INTEGER NOT NULL DEFAULT 0,
+  graded_items     INTEGER NOT NULL DEFAULT 0,
+  deficiency_count INTEGER NOT NULL DEFAULT 0,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (inspection_id, section_code)
 );
 
 CREATE INDEX idx_inspections_vessel ON inspections(vessel_id);

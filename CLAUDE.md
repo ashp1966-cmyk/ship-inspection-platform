@@ -456,6 +456,13 @@ and `POST /api/inspections` returns 400 if either is blank. Readers show
 `COALESCE(v.name, i.entered_vessel_name)` / `COALESCE(v.imo_number, i.entered_imo_number)` and must
 `LEFT JOIN vessels` (the dashboard's two inner JOINs were changed so unlinked inspections don't vanish).
 
-Still broken, pre-existing and unrelated: `GET /inspections/[id]` and `GET /api/inspections/[id]`
-500 for every inspection because the `section_scores` table was never created (same recurring
-"code references a table that doesn't exist" pattern as `attachments`/`users`).
+## Scoring schema: section_scores + inspections score columns (migration 003)
+
+`GET /inspections/[id]` and `GET /api/inspections/[id]` 500'd for every inspection because
+`section_scores` was never created — another instance of the "code references a table that
+doesn't exist" pattern. Columns were inferred from the PATCH `calculate_score` insert and the
+inspection-manager reader; `UNIQUE (inspection_id, section_code)` is required by that insert's
+`ON CONFLICT`. The same PATCH also writes `inspections.overall_score/condition_score/
+management_score`, which didn't exist either (and `/vessels/[id]` selects `overall_score`), so
+migration `db/migrations/003_section_scores_and_inspection_scores.sql` adds all of it (scores are
+`Math.round`ed 0–100 integers from `src/lib/grading.ts`).
