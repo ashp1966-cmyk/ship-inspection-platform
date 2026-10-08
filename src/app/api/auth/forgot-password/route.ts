@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { randomBytes, createHash } from "crypto";
-import { sql } from "@/lib/db";
+import { preAuthSql } from "@/lib/db";
 
 const GENERIC_MESSAGE =
   "If an account exists for that email, a password reset link has been sent.";
@@ -12,9 +12,7 @@ export async function POST(req: Request) {
   }
   const userEmail = String(email).toLowerCase().trim();
 
-  const users = await sql`
-    SELECT id FROM users WHERE email = ${userEmail} AND is_active = true
-  ` as any[];
+  const users = await preAuthSql`SELECT id FROM auth_find_user(${userEmail}, true)` as any[];
 
   // Always return the same message whether or not the account exists, so
   // this endpoint can't be used to enumerate registered emails.
@@ -27,7 +25,7 @@ export async function POST(req: Request) {
   const tokenHash = createHash("sha256").update(token).digest("hex");
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-  await sql`
+  await preAuthSql`
     INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
     VALUES (${userId}, ${tokenHash}, ${expiresAt.toISOString()})
   `;

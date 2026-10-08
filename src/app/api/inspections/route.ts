@@ -23,6 +23,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: imoProblem }, { status: 400 });
     }
 
+    // A linked vessel must belong to the caller's own organization. RLS alone is not enough
+    // here: FK checks bypass it, and a platform admin can *see* other orgs' vessels.
+    if (vesselId) {
+      const own = await sql`SELECT id FROM vessels WHERE id = ${vesselId} AND organization_id = app_org_id()` as any[];
+      if (own.length === 0) {
+        return NextResponse.json({ error: "Selected vessel not found." }, { status: 400 });
+      }
+    }
+
     // 1. Create inspection record
     const [inspection] = await sql`
       INSERT INTO inspections (vessel_id, entered_vessel_name, entered_imo_number, inspection_type, status, started_at)

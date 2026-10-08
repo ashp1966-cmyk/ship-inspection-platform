@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { jwtVerify } from "jose";
-
-const SECRET = new TextEncoder().encode(
-  process.env.AUTH_SECRET ?? "change-this-secret-in-production"
-);
+import { SESSION_COOKIE, verifySession } from "@/lib/session";
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -25,19 +21,17 @@ export async function proxy(req: NextRequest) {
     return res;
   }
 
-  const token = req.cookies.get("ship_session")?.value;
+  const token = req.cookies.get(SESSION_COOKIE)?.value;
   if (!token) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  try {
-    await jwtVerify(token, SECRET);
-    return res;
-  } catch {
-    const redirect = NextResponse.redirect(new URL("/login", req.url));
-    redirect.cookies.set("ship_session", "", { maxAge: 0, path: "/" });
-    return redirect;
-  }
+  // Signature + expiry + tenant claims. Legacy sessions (no organization_id) fail here and
+  // are sent back to /login to get a token that carries the claims RLS needs.
+  if (await verifySession(token)) return res;
+  const redirect = NextResponse.redirect(new URL("/login", req.url));
+  redirect.cookies.set(SESSION_COOKIE, "", { maxAge: 0, path: "/" });
+  return redirect;
 }
 
 export const config = {

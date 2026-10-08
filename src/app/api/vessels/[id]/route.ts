@@ -42,6 +42,7 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
       WHERE id = ${id}
       RETURNING *
     ` as any[];
+    if (!v) return NextResponse.json({ error: "Vessel not found" }, { status: 404 }); // also: another org's vessel (RLS hides it)
     return NextResponse.json(fixDates(v));
   } catch (err: any) {
     console.error(err);

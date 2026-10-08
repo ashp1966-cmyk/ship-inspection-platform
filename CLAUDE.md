@@ -473,14 +473,41 @@ management_score`, which didn't exist either (and `/vessels/[id]` selects `overa
 migration `db/migrations/003_section_scores_and_inspection_scores.sql` adds all of it (scores are
 `Math.round`ed 0–100 integers from `src/lib/grading.ts`).
 
-## Multi-tenancy (in progress — migrations 004–006)
+## Multi-tenancy (migrations 004–007)
 
-- `organizations` + `organization_id` on every tenant table (migration 004); RLS `tenant_isolation`
-  policies keyed on `app.org_id` / `app.is_platform_admin` (005); `vessels` IMO unique per org (006).
-- The app role must be `ship_app` (`DATABASE_URL_APP`), not `neondb_owner` — the owner has BYPASSRLS
-  and owns the tables, so RLS never applies to it. Owner connection is for migrations only.
-- Pre-login lookups go through `auth_find_user()` / `auth_set_password()` (SECURITY DEFINER).
+AUK is both a tenant (owns all pre-existing data) and the platform admin (`users.is_platform_admin`).
+
+- `organizations` + `organization_id` on every tenant table (004); RLS `tenant_isolation` policies
+  keyed on `app.org_id` / `app.is_platform_admin` (005); `vessels` IMO unique per org (006);
+  `organization_id` defaults to `COALESCE(app_org_id(), <AUK id>)` (007).
+- **The app connects as `ship_app` (`DATABASE_URL_APP`), never `neondb_owner`.** The owner has
+  BYPASSRLS and owns the tables, so RLS never applies to it; `DATABASE_URL` (owner) is for
+  migrations/scripts only. `src/lib/db.ts` throws at import if `DATABASE_URL_APP` is unset rather
+  than silently falling back to the owner.
+- **Choke point: `src/lib/db.ts`.** `sql\`...\``, `sql.query()` and `sql.transaction()` verify the
+  `ship_session` JWT (`src/lib/session.ts`, jose, HS256) and send each query as one Neon HTTP
+  transaction `[set_config(app.org_id), set_config(app.is_platform_admin), <query>]`, stripping the
+  set_config result. No valid session => empty context => RLS returns 0 rows (fail closed). Routes
+  need no org handling for reads; inserts default to the caller's org via the column default.
+- JWT claims: `sub, email, role, name, organization_id, is_platform_admin`. `proxy.ts` and `db.ts`
+  both call `verifySession`, which rejects tokens lacking the tenant claims (so pre-multitenancy
+  sessions are forced to re-login). `AUTH_SECRET` has no fallback any more.
+- Pre-login flows (login, forgot/reset password) use `preAuthSql` (no org context) + the
+  SECURITY DEFINER `auth_find_user()` / `auth_set_password()`; they cannot read RLS tables directly.
+  The old `AUTH_EMAIL`/`AUTH_PASSWORD` env-var login fallback was removed (no org to put in a token).
+- RLS does not cover **foreign-key targets** (FK checks bypass it) or **non-DB resources**. So
+  `POST /api/inspections` explicitly checks a linked `vesselId` is in the caller's org, and
+  `/api/upload` namespaces blobs under `<organization_id>/`.
+- New org + first user: `NEW_USER_PASSWORD=... node scripts/create-organization.mjs "<Org>" <email> "<Name>"`
+  (owner connection, one transaction; `--platform-admin` optional). No self-serve signup yet.
+  `POST /api/users` creates users in the caller's org (a platform admin may pass `organization_id`);
+  `is_platform_admin` is never settable via the API.
+- Verification: `node scripts/rls-test.mjs` (SQL-level, always rolls back).
 - **One-off, not in any migration file:** `UPDATE users SET is_platform_admin = true WHERE
   email = 'ashp1966@gmail.com'` was run directly against live Neon (2026-10-08). A fresh DB
-  restored from `db/` alone will have no platform admin until that is repeated deliberately.
-- `scripts/rls-test.mjs` verifies the policies (always ROLLBACKs; safe on the live DB).
+  restored from `db/` alone has no platform admin until that is repeated deliberately.
+- **Deploy/rollback:** add `DATABASE_URL_APP` (and confirm `AUTH_SECRET`) in Vercel, deploy, smoke-test
+  login + vessels + an inspection save immediately. Rollback = Vercel instant-rollback to the
+  previous deployment (old code + owner `DATABASE_URL`); that stays valid because owner inserts
+  still default to AUK and the owner bypasses RLS. Reverting only the env var is NOT enough: the new
+  code refuses to start without it.

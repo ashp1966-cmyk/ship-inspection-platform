@@ -1,66 +1,47 @@
 import { NextResponse } from "next/server";
-import { SignJWT } from "jose";
 import bcrypt from "bcryptjs";
-import { sql } from "@/lib/db";
-
-const SECRET = new TextEncoder().encode(
-  process.env.AUTH_SECRET ?? "change-this-secret-in-production"
-);
+import { preAuthSql } from "@/lib/db";
+import { SESSION_COOKIE, SESSION_MAX_AGE, signSession } from "@/lib/session";
 
 export async function POST(req: Request) {
   const { email, password } = await req.json();
   if (!email || !password) {
     return NextResponse.json({ message: "Email and password required." }, { status: 400 });
   }
+  const userEmail = String(email).toLowerCase().trim();
 
-  let userEmail = email.toLowerCase().trim();
-  let role = "inspector";
-  let name = "";
-
-  // 1. Check DB users first
+  // Pre-login there is no org context, so `users` (RLS-protected) can't be read directly;
+  // auth_find_user() is the SECURITY DEFINER lookup from migration 005.
+  let user: any;
   try {
-    const users = await sql`
-      SELECT * FROM users WHERE email = ${userEmail} AND is_active = true
-    ` as any[];
-
-    if (users.length > 0) {
-      const user = users[0];
-      const valid = await bcrypt.compare(password, user.password_hash);
-      if (!valid) return NextResponse.json({ message: "Invalid email or password." }, { status: 401 });
-      role = user.role;
-      name = user.full_name;
-    } else {
-      // 2. Fall back to env-var admin credentials
-      const envEmail = process.env.AUTH_EMAIL ?? "";
-      const envPass  = process.env.AUTH_PASSWORD ?? "";
-      if (userEmail !== envEmail.toLowerCase() || password !== envPass) {
-        return NextResponse.json({ message: "Invalid email or password." }, { status: 401 });
-      }
-      role = "admin";
-      name = "Administrator";
-    }
-  } catch {
-    // DB may not have users table yet — fall back to env vars
-    const envEmail = process.env.AUTH_EMAIL ?? "";
-    const envPass  = process.env.AUTH_PASSWORD ?? "";
-    if (userEmail !== envEmail.toLowerCase() || password !== envPass) {
-      return NextResponse.json({ message: "Invalid email or password." }, { status: 401 });
-    }
-    role = "admin"; name = "Administrator";
+    [user] = (await preAuthSql`SELECT * FROM auth_find_user(${userEmail}, true)`) as any[];
+  } catch (err) {
+    console.error("login lookup failed", err);
+    return NextResponse.json({ message: "Sign-in is temporarily unavailable." }, { status: 503 });
   }
 
-  const token = await new SignJWT({ email: userEmail, role, name })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime("8h")
-    .sign(SECRET);
+  // The old AUTH_EMAIL/AUTH_PASSWORD env-var fallback is gone: it had no users row, hence no
+  // organization, so it cannot be given tenant claims. The admin now lives in `users`.
+  const valid = user ? await bcrypt.compare(password, user.password_hash) : false;
+  if (!user || !valid) {
+    return NextResponse.json({ message: "Invalid email or password." }, { status: 401 });
+  }
 
-  const res = NextResponse.json({ ok: true, role, name });
-  res.cookies.set("ship_session", token, {
+  const token = await signSession({
+    sub: user.id,
+    email: userEmail,
+    role: user.role,
+    name: user.full_name,
+    organization_id: user.organization_id,
+    is_platform_admin: user.is_platform_admin === true,
+  });
+
+  const res = NextResponse.json({ ok: true, role: user.role, name: user.full_name });
+  res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 60 * 60 * 8,
+    maxAge: SESSION_MAX_AGE,
     path: "/",
   });
   return res;

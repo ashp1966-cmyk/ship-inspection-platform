@@ -42,10 +42,10 @@ CREATE TYPE inspection_status AS ENUM ('DRAFT', 'IN_PROGRESS', 'COMPLETED', 'ISS
 
 -- ---------- 0. ORGANIZATIONS (multi-tenancy; see migration 004) ----------
 -- AUK is both a tenant and the platform administrator. Every tenant-scoped table
--- below carries organization_id. The DEFAULT (AUK's id) on those columns is
--- TEMPORARY, added so the pre-multitenancy app keeps working; it is removed once
--- every insert path supplies organization_id (commit 3). The UUID here is the
--- live AUK row; a fresh DB must create AUK first and substitute its id.
+-- below carries organization_id, defaulting (migration 007) to the caller's org
+-- (app_org_id()), else AUK's id for owner/migration inserts. The UUID is the live
+-- AUK row; a fresh DB must create AUK first and substitute its id. app_org_id()
+-- is defined in the RLS section at the bottom of this file (create it first).
 CREATE TABLE organizations (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name       TEXT NOT NULL UNIQUE,
@@ -55,7 +55,7 @@ CREATE TABLE organizations (
 -- ---------- 1. VESSELS -----------------------------------------------
 CREATE TABLE vessels (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
+  organization_id UUID NOT NULL DEFAULT COALESCE(app_org_id(), '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3'::uuid) REFERENCES organizations(id),
   name              TEXT NOT NULL,
   imo_number        VARCHAR(10) NOT NULL,  -- unique per organization, see vessels_org_imo_key
   vessel_type       vessel_type NOT NULL,
@@ -104,7 +104,7 @@ CREATE TABLE template_questions (
 -- ---------- 3. INSPECTIONS --------------------------------------------
 CREATE TABLE inspections (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
+  organization_id UUID NOT NULL DEFAULT COALESCE(app_org_id(), '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3'::uuid) REFERENCES organizations(id),
   vessel_id       UUID REFERENCES vessels(id) ON DELETE CASCADE,  -- optional link; see migration 002
   entered_vessel_name TEXT,                     -- typed Vessel Name (required by the app)
   entered_imo_number  TEXT,                     -- typed IMO Number (required by the app)
@@ -126,7 +126,7 @@ CREATE TABLE inspections (
 -- Per-section scores, written by PATCH /api/inspections/[id] calculate_score.
 CREATE TABLE section_scores (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
+  organization_id UUID NOT NULL DEFAULT COALESCE(app_org_id(), '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3'::uuid) REFERENCES organizations(id),
   inspection_id    UUID NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
   section_code     TEXT NOT NULL,
   section_title    TEXT,
@@ -146,7 +146,7 @@ CREATE INDEX idx_inspections_type   ON inspections(inspection_type, status);
 -- and simply unused for CONDITION inspections.
 CREATE TABLE inspection_items (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
+  organization_id UUID NOT NULL DEFAULT COALESCE(app_org_id(), '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3'::uuid) REFERENCES organizations(id),
   inspection_id  UUID NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
   question_id    UUID REFERENCES template_questions(id) ON DELETE SET NULL,
   section_code   TEXT NOT NULL,                 -- denormalised for fast render
@@ -185,7 +185,7 @@ CREATE INDEX idx_items_inspection ON inspection_items(inspection_id, section_cod
 -- for tankers, 'reliquefaction_plant' for LNG carriers).
 CREATE TABLE vessel_specific_fields (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
+  organization_id UUID NOT NULL DEFAULT COALESCE(app_org_id(), '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3'::uuid) REFERENCES organizations(id),
   vessel_id    UUID NOT NULL REFERENCES vessels(id) ON DELETE CASCADE,
   field_key    TEXT NOT NULL,
   field_value  TEXT,
@@ -197,7 +197,7 @@ CREATE TABLE vessel_specific_fields (
 -- reports are immutable even if formulas change later.
 CREATE TABLE capex_projections (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
+  organization_id UUID NOT NULL DEFAULT COALESCE(app_org_id(), '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3'::uuid) REFERENCES organizations(id),
   inspection_id  UUID NOT NULL UNIQUE REFERENCES inspections(id) ON DELETE CASCADE,
   horizon_years  INT NOT NULL DEFAULT 5,
   inflation_rate NUMERIC(4,3) NOT NULL DEFAULT 0.030,
@@ -218,7 +218,7 @@ CREATE TABLE capex_projections (
 -- denormalized like inspection_items.section_code — not a FK.
 CREATE TABLE attachments (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
+  organization_id UUID NOT NULL DEFAULT COALESCE(app_org_id(), '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3'::uuid) REFERENCES organizations(id),
   inspection_item_id  UUID REFERENCES inspection_items(id) ON DELETE CASCADE,
   inspection_id       UUID NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
   question_id         TEXT,
@@ -240,7 +240,7 @@ CREATE INDEX idx_attachments_inspection  ON attachments(inspection_id);
 -- Column set mirrors db/random_spares_check_spec.json.
 CREATE TABLE random_spares_check_items (
   id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
+  organization_id UUID NOT NULL DEFAULT COALESCE(app_org_id(), '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3'::uuid) REFERENCES organizations(id),
   inspection_id         UUID NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
   sr_no                 INT NOT NULL,           -- display row number, not a DB identity
   equipment_name        TEXT,
@@ -268,7 +268,7 @@ CREATE INDEX idx_spares_inspection ON random_spares_check_items(inspection_id, s
 -- somewhere persistent to write the new password.
 CREATE TABLE users (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
+  organization_id UUID NOT NULL DEFAULT COALESCE(app_org_id(), '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3'::uuid) REFERENCES organizations(id),
   email         TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   full_name     TEXT NOT NULL,
