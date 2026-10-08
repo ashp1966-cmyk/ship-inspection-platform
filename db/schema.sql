@@ -40,9 +40,22 @@ CREATE TYPE answer_kind AS ENUM (
 
 CREATE TYPE inspection_status AS ENUM ('DRAFT', 'IN_PROGRESS', 'COMPLETED', 'ISSUED');
 
+-- ---------- 0. ORGANIZATIONS (multi-tenancy; see migration 004) ----------
+-- AUK is both a tenant and the platform administrator. Every tenant-scoped table
+-- below carries organization_id. The DEFAULT (AUK's id) on those columns is
+-- TEMPORARY, added so the pre-multitenancy app keeps working; it is removed once
+-- every insert path supplies organization_id (commit 3). The UUID here is the
+-- live AUK row; a fresh DB must create AUK first and substitute its id.
+CREATE TABLE organizations (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- ---------- 1. VESSELS -----------------------------------------------
 CREATE TABLE vessels (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
   name              TEXT NOT NULL,
   imo_number        VARCHAR(10) UNIQUE NOT NULL,
   vessel_type       vessel_type NOT NULL,
@@ -91,6 +104,7 @@ CREATE TABLE template_questions (
 -- ---------- 3. INSPECTIONS --------------------------------------------
 CREATE TABLE inspections (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
   vessel_id       UUID REFERENCES vessels(id) ON DELETE CASCADE,  -- optional link; see migration 002
   entered_vessel_name TEXT,                     -- typed Vessel Name (required by the app)
   entered_imo_number  TEXT,                     -- typed IMO Number (required by the app)
@@ -112,6 +126,7 @@ CREATE TABLE inspections (
 -- Per-section scores, written by PATCH /api/inspections/[id] calculate_score.
 CREATE TABLE section_scores (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
   inspection_id    UUID NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
   section_code     TEXT NOT NULL,
   section_title    TEXT,
@@ -131,6 +146,7 @@ CREATE INDEX idx_inspections_type   ON inspections(inspection_type, status);
 -- and simply unused for CONDITION inspections.
 CREATE TABLE inspection_items (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
   inspection_id  UUID NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
   question_id    UUID REFERENCES template_questions(id) ON DELETE SET NULL,
   section_code   TEXT NOT NULL,                 -- denormalised for fast render
@@ -169,6 +185,7 @@ CREATE INDEX idx_items_inspection ON inspection_items(inspection_id, section_cod
 -- for tankers, 'reliquefaction_plant' for LNG carriers).
 CREATE TABLE vessel_specific_fields (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
   vessel_id    UUID NOT NULL REFERENCES vessels(id) ON DELETE CASCADE,
   field_key    TEXT NOT NULL,
   field_value  TEXT,
@@ -180,6 +197,7 @@ CREATE TABLE vessel_specific_fields (
 -- reports are immutable even if formulas change later.
 CREATE TABLE capex_projections (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
   inspection_id  UUID NOT NULL UNIQUE REFERENCES inspections(id) ON DELETE CASCADE,
   horizon_years  INT NOT NULL DEFAULT 5,
   inflation_rate NUMERIC(4,3) NOT NULL DEFAULT 0.030,
@@ -200,6 +218,7 @@ CREATE TABLE capex_projections (
 -- denormalized like inspection_items.section_code — not a FK.
 CREATE TABLE attachments (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
   inspection_item_id  UUID REFERENCES inspection_items(id) ON DELETE CASCADE,
   inspection_id       UUID NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
   question_id         TEXT,
@@ -221,6 +240,7 @@ CREATE INDEX idx_attachments_inspection  ON attachments(inspection_id);
 -- Column set mirrors db/random_spares_check_spec.json.
 CREATE TABLE random_spares_check_items (
   id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
   inspection_id         UUID NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
   sr_no                 INT NOT NULL,           -- display row number, not a DB identity
   equipment_name        TEXT,
@@ -248,10 +268,12 @@ CREATE INDEX idx_spares_inspection ON random_spares_check_items(inspection_id, s
 -- somewhere persistent to write the new password.
 CREATE TABLE users (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL DEFAULT '743a27f6-4b1b-4eb6-b13b-9907deb5cbb3' REFERENCES organizations(id),
   email         TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   full_name     TEXT NOT NULL,
   role          TEXT NOT NULL DEFAULT 'inspector',
+  is_platform_admin BOOLEAN NOT NULL DEFAULT false,  -- cross-tenant visibility (RLS bypass); set deliberately, never by default
   is_active     BOOLEAN NOT NULL DEFAULT true,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -269,6 +291,7 @@ CREATE TABLE password_reset_tokens (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- password_reset_tokens is intentionally not tenant-scoped (unauthenticated reset flow).
 CREATE INDEX idx_reset_tokens_user ON password_reset_tokens(user_id);
 
 -- ---------- updated_at trigger ----------------------------------------
@@ -279,3 +302,13 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_vessels_updated     BEFORE UPDATE ON vessels          FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_inspections_updated BEFORE UPDATE ON inspections      FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_items_updated       BEFORE UPDATE ON inspection_items FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE INDEX idx_vessels_org ON vessels(organization_id);
+CREATE INDEX idx_inspections_org ON inspections(organization_id);
+CREATE INDEX idx_inspection_items_org ON inspection_items(organization_id);
+CREATE INDEX idx_attachments_org ON attachments(organization_id);
+CREATE INDEX idx_random_spares_check_items_org ON random_spares_check_items(organization_id);
+CREATE INDEX idx_section_scores_org ON section_scores(organization_id);
+CREATE INDEX idx_capex_projections_org ON capex_projections(organization_id);
+CREATE INDEX idx_vessel_specific_fields_org ON vessel_specific_fields(organization_id);
+CREATE INDEX idx_users_org ON users(organization_id);
