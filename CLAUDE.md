@@ -542,3 +542,20 @@ AUK is both a tenant (owns all pre-existing data) and the platform admin (`users
 - `inspector_name` is persisted: the form's name, else the signed-in user's `full_name`.
 - Display labels come from `src/lib/labels.ts` (`inspectionTypeLabel` etc.). Never write "PRE_PURCHASE or else Condition":
   there are four inspection types (Condition, Pre-Purchase, Technical, RightShip).
+
+### Inspection writes (commit B1)
+
+- **One write path:** `src/lib/inspection-writes.ts` (`buildRows` + `insertQueries`) turns the save body into rows; `POST /api/inspections`
+  runs vessel registration, the inspection insert and all item/attachment/spares/capex inserts as ONE `sql.transaction` (one
+  `jsonb_to_recordset` statement per table). Validation (`BadRequest`) happens before anything is written.
+- **inspection_items row kinds** (told apart on reload): `section_code='DEFECT_LIST'` = defect; `equipment_name IS NOT NULL` =
+  Pre-Purchase inventory; `custom_kind IS NOT NULL` = inspector-added question (`prompt` = client id, `custom_prompt` = text,
+  `section_code` = its real section); otherwise a template question (`prompt` = question id). Migration 008 added
+  `equipment_manufacturer/_year_of_make/_specifications/_condition` and `custom_prompt/custom_kind`.
+- **YES_NO has three answers** (Yes/No/N/A). N/A is stored as `text_value='NA'` with `bool_value NULL`; it used to be stored as
+  `bool_value=false` (= "No", and then counted as a deficiency). Numeric `0` is stored (it used to be dropped). A question is saved
+  if it has an answer, a remark, an attachment, or was added by the inspector (remarks/photos on unanswered questions used to vanish).
+  The form sends only the active tab's keys (`answers/remarks/attachments` are one map shared by all four tabs).
+- **Read-only role:** `requireEditor()` (`authz.ts`; fresh DB read, role admin|inspector) guards inspection POST and PATCH, vessel
+  POST/PUT/DELETE, deficiency PATCH and `/api/upload`. `viewer` can read everything and write nothing.
+

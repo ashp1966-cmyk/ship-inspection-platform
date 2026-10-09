@@ -286,16 +286,28 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
     setTimeout(() => fileInputRef.current?.click(), 50);
   }
 
-  function buildQuestionMeta(type: DefectInspType): Record<string, string> {
-    const meta: Record<string, string> = {};
-    const sections = type === "PRE_PURCHASE" ? prePurchaseSections
+  function tabSections(type: DefectInspType) {
+    return type === "PRE_PURCHASE" ? prePurchaseSections
       : type === "TECHNICAL" ? technicalSections
       : type === "RIGHTSHIP" ? rightshipSections
       : conditionSections;
-    for (const s of sections) {
+  }
+  function buildQuestionMeta(type: DefectInspType): Record<string, string> {
+    const meta: Record<string, string> = {};
+    for (const s of tabSections(type)) {
       for (const q of s.questions) meta[q.id] = q.answerKind;
     }
     return meta;
+  }
+  // Inspector-added questions in this tab, so their text and kind are saved with the inspection.
+  function buildCustomQuestions(type: DefectInspType) {
+    return tabSections(type).flatMap(s => s.questions.filter(q => q.custom)
+      .map(q => ({ id:q.id, sectionCode:s.code, prompt:q.prompt, answerKind:q.answerKind })));
+  }
+  // answers/remarks/attachments are one map shared by all four tabs; send only this tab's keys
+  // (plus its defect-row photos) so another tab's entries don't leak into the saved inspection.
+  function pickFor<T>(map: Record<string, T>, keep: Set<string>): Record<string, T> {
+    return Object.fromEntries(Object.entries(map).filter(([k]) => keep.has(k)));
   }
 
   async function saveInspection(type: DefectInspType) {
@@ -306,6 +318,8 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
     if (imoProblem) { setSaveError(imoProblem); return; }
     setSaving(true); setSaveError("");
     try {
+      const questionMeta = buildQuestionMeta(type);
+      const keepKeys = new Set([...Object.keys(questionMeta), ...defectRows[type].map(r => r.rowKey)]);
       const res = await fetch("/api/inspections", {
         method:"POST",
         headers:{"Content-Type":"application/json"},
@@ -313,7 +327,8 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
           vesselId: selectedVessel || null,
           vesselName: vesselName.trim(), imoNumber: imoNumber.trim(),
           vesselType, inspectionType: type, inspectorName: inspectorName.trim() || undefined,
-          answers, questionMeta: buildQuestionMeta(type), remarks, attachments,
+          answers: pickFor(answers, keepKeys), questionMeta, remarks: pickFor(remarks, keepKeys),
+          attachments: pickFor(attachments, keepKeys), customQuestions: buildCustomQuestions(type),
           inventory: type==="PRE_PURCHASE" ? inventory : undefined,
           projection: type==="PRE_PURCHASE" ? projection : undefined,
           sparesCheck: type==="TECHNICAL" ? sparesRows.map(({rowKey, ...values}) => values) : undefined,

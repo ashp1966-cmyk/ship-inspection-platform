@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireEditor } from "@/lib/authz";
 import { sql, dateStr } from "@/lib/db";
 import { imoError } from "@/lib/imo";
 
@@ -18,6 +19,8 @@ export async function GET(_: Request, props: { params: Promise<{ id: string }> }
 }
 
 export async function PUT(req: Request, props: { params: Promise<{ id: string }> }) {
+  const guard = await requireEditor();
+  if ("error" in guard) return guard.error;
   try {
     const { id } = await props.params;
     const b = await req.json();
@@ -51,6 +54,8 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
 }
 
 export async function DELETE(_: Request, props: { params: Promise<{ id: string }> }) {
+  const guard = await requireEditor();
+  if ("error" in guard) return guard.error;
   const { id } = await props.params;
   await sql`DELETE FROM vessels WHERE id = ${id}`;
   return NextResponse.json({ ok: true });

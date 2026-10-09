@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { requireEditor } from "@/lib/authz";
 import { calculateSectionScore, calculateOverallScore, generateExecutiveSummary } from "@/lib/grading";
 
 export async function GET(_: Request, props: { params: Promise<{ id: string }> }) {
@@ -27,6 +28,8 @@ export async function GET(_: Request, props: { params: Promise<{ id: string }> }
 }
 
 export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const guard = await requireEditor();
+  if ("error" in guard) return guard.error;
   const { id } = await props.params;
   const body = await req.json();
   const { action } = body;

@@ -178,6 +178,12 @@ CREATE TABLE inspection_items (
   annual_maint_cost     NUMERIC(12,2),   -- recurring OpEx baseline, USD/yr
   remaining_life_years  NUMERIC(4,1),    -- inspector's estimate
   replacement_cost      NUMERIC(12,2),   -- used if remaining life < horizon
+  equipment_manufacturer   TEXT,  -- migration 008
+  equipment_year_of_make   TEXT,
+  equipment_specifications TEXT,
+  equipment_condition      TEXT,
+  custom_prompt TEXT,             -- inspector-added question: its text (prompt holds the client id)
+  custom_kind   TEXT,             -- ... and its answer kind
 
   -- ---- Deficiency tracking & alerting ----
   deficiency_status    TEXT,        -- 'OPEN' | 'IN_PROGRESS' | 'CLOSED', NULL = not a deficiency

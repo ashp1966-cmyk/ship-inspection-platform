@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql, dateStr } from "@/lib/db";
 import { imoError } from "@/lib/imo";
+import { requireEditor } from "@/lib/authz";
 
 // Optional DATE/NUMERIC columns reject "" ("invalid input syntax for type
 // date/numeric") — the Vessels form leaves untouched fields as "", so blank
@@ -17,6 +18,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const guard = await requireEditor();
+  if ("error" in guard) return guard.error;
   try {
     const b = await req.json();
     const imoProblem = imoError(typeof b.imo_number === "string" ? b.imo_number.trim() : "");

@@ -1,10 +1,13 @@
 import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import { getClaims } from "@/lib/db";
+import { requireEditor } from "@/lib/authz";
 
 // POST /api/upload?filename=myfile.jpg
 // Body: the raw file bytes (multipart not needed — stream directly)
 export async function POST(req: Request) {
+  const guard = await requireEditor();
+  if ("error" in guard) return guard.error;
   const { searchParams } = new URL(req.url);
   const filename = searchParams.get("filename") ?? `file-${Date.now()}`;
   const claims = await getClaims();

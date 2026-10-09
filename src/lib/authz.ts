@@ -42,3 +42,20 @@ export function canManage(actor: Actor, target: { organization_id: string; is_pl
   if (target.is_platform_admin) return false;
   return target.organization_id === actor.organization_id;
 }
+
+// Who may create or edit inspections, vessels, deficiencies and uploads: signed in, still active,
+// and role admin or inspector. 'viewer' is read-only. Role comes from a fresh DB read (not the
+// JWT) so a demotion or deactivation applies immediately, same as requireUserAdmin.
+export const EDITOR_ROLES = ["admin", "inspector"];
+export async function requireEditor(): Promise<{ actor: Actor } | { error: NextResponse }> {
+  const claims = await getClaims();
+  if (!claims) return { error: deny(401, "Unauthorized") };
+  const [u] = (await sql`
+    SELECT id, role, is_active, organization_id, is_platform_admin FROM users WHERE id = ${claims.sub}
+  `) as any[];
+  if (!u || !u.is_active) return { error: deny(401, "Unauthorized") };
+  if (!EDITOR_ROLES.includes(u.role)) {
+    return { error: deny(403, "Your role is read-only. Only admins and inspectors can create or edit.") };
+  }
+  return { actor: { id: u.id, organization_id: u.organization_id, role: u.role, is_platform_admin: u.is_platform_admin } };
+}
