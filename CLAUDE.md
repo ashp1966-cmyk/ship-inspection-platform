@@ -532,3 +532,13 @@ AUK is both a tenant (owns all pre-existing data) and the platform admin (`users
   non-localhost `BASE_URL`; cleans up its throwaway org in a `finally`.
 - Production upload test (2026-10-08): session required, blob stored at `<organization_id>/<filename>`,
   `attachments` row saved and returned by `GET /api/inspections/[id]`; test blob and rows deleted afterwards.
+
+### Inspections create/link a vessel (commit A)
+
+- `POST /api/inspections` without a `vesselId` looks up the caller's vessel by IMO (`organization_id = app_org_id()`),
+  links it if found (never overwrites it) or registers one from the typed name, IMO and the form's vessel type
+  (`ON CONFLICT (organization_id, imo_number) DO NOTHING` for racing saves). Only name/IMO/type are NOT NULL on
+  `vessels`; owners, class etc. stay empty. A new IMO with no valid `vesselType` is a 400. `entered_*` are still stored.
+- `inspector_name` is persisted: the form's name, else the signed-in user's `full_name`.
+- Display labels come from `src/lib/labels.ts` (`inspectionTypeLabel` etc.). Never write "PRE_PURCHASE or else Condition":
+  there are four inspection types (Condition, Pre-Purchase, Technical, RightShip).

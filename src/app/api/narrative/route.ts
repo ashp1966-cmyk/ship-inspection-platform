@@ -1,3 +1,4 @@
+import { inspectionTypeLabel } from "@/lib/labels";
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 
@@ -60,7 +61,7 @@ export async function POST(req: Request) {
       i => i.grade_value === "POOR" || i.grade_value === "ACTION_REQUIRED" || i.bool_value === false
     );
 
-    const inspectionLabel = insp.inspection_type === "PRE_PURCHASE" ? "pre-purchase" : "condition";
+    const inspectionLabel = inspectionTypeLabel(insp.inspection_type).toLowerCase();
 
     const prompt = `You are a professional marine surveyor writing the executive summary section of a ${inspectionLabel} inspection report.
 

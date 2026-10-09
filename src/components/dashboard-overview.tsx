@@ -9,6 +9,7 @@ interface Deficiency { id:string; prompt:string; section_code:string; grade_valu
 const GRADE_STYLE:Record<string,string>={POOR:"background:#FEF3C7;color:#92400E",ACTION_REQUIRED:"background:#FEE2E2;color:#991B1B"};
 const STATUS_STYLE:Record<string,string>={OPEN:"background:#FEE2E2;color:#991B1B",IN_PROGRESS:"background:#FEF3C7;color:#92400E",CLOSED:"background:#D1FAE5;color:#065F46"};
 const STATUS_LABEL:Record<string,string>={OPEN:"Open",IN_PROGRESS:"In Progress",CLOSED:"Closed"};
+import { inspectionTypeLabel } from "@/lib/labels";
 const TYPES:Record<string,string>={BULK_CARRIER:"Bulk Carrier",CONTAINER_SHIP:"Container Ship",OIL_TANKER:"Oil Tanker",LNG_CARRIER:"LNG Carrier",GENERAL_CARGO:"General Cargo",LPG_TANKER:"LPG Tanker",CRUISE_SHIP:"Cruise Ship"};
 const fmt=(d:string)=>d?new Date(d).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"—";
 const NAV="#0A1628", TEAL="#1BA5C0";
@@ -97,8 +98,8 @@ export default function DashboardOverview({ stats, recentInspections, deficienci
                   {recentInspections.map((r,i)=>(
                     <tr key={r.id} style={{ borderTop:"1px solid #F3F4F6", background:i%2===0?"#fff":"#FAFAFA" }}>
                       <td style={{ padding:"9px 12px", fontWeight:500, color:"#1A2533" }}>{r.vessel_name}</td>
-                      <td style={{ padding:"9px 12px", color:"#6B7280" }}>{TYPES[r.vessel_type]??r.vessel_type}</td>
-                      <td style={{ padding:"9px 12px", color:"#6B7280" }}>{r.inspection_type==="CONDITION"?"Condition":"Pre-Purchase"}</td>
+                      <td style={{ padding:"9px 12px", color:"#6B7280" }}>{(r.vessel_type && (TYPES[r.vessel_type]??r.vessel_type)) || "—"}</td>
+                      <td style={{ padding:"9px 12px", color:"#6B7280" }}>{inspectionTypeLabel(r.inspection_type)}</td>
                       <td style={{ padding:"9px 12px", color:"#6B7280" }}>{r.inspector_name??"—"}</td>
                       <td style={{ padding:"9px 12px", color:"#6B7280", whiteSpace:"nowrap" }}>{fmt(r.started_at??r.created_at)}</td>
                       <td style={{ padding:"9px 12px" }}>

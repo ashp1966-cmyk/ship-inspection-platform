@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 const TEAL="#1BA5C0", NAV="#0A1628";
+import { inspectionTypeLabel, inspectionTypeColor } from "@/lib/labels";
 const TYPES:Record<string,string>={BULK_CARRIER:"Bulk Carrier",CONTAINER_SHIP:"Container Ship",OIL_TANKER:"Oil Tanker",LNG_CARRIER:"LNG Carrier",GENERAL_CARGO:"General Cargo",LPG_TANKER:"LPG Tanker",CRUISE_SHIP:"Cruise Ship"};
 const GRADE_COLOR:Record<string,string>={GOOD:"#065F46",FAIR:"#92400E",POOR:"#C2410C",ACTION_REQUIRED:"#DC2626"};
 const GRADE_BG:Record<string,string>={GOOD:"#D1FAE5",FAIR:"#FEF3C7",POOR:"#FED7AA",ACTION_REQUIRED:"#FEE2E2"};
@@ -90,8 +91,8 @@ export default function VesselHistory({ vessel, inspections }: { vessel: any; in
                 {inspections.map((insp,i)=>(
                   <tr key={insp.id} style={{ borderTop:"1px solid #F3F4F6", background:i%2===0?"#fff":"#FAFAFA" }}>
                     <td style={{ padding:"9px 12px" }}>
-                      <span style={{ padding:"2px 8px", borderRadius:20, fontSize:13, fontWeight:500, background:insp.inspection_type==="PRE_PURCHASE"?"#FEF3C7":"#E0F2FE", color:insp.inspection_type==="PRE_PURCHASE"?"#92400E":"#0369A1" }}>
-                        {insp.inspection_type==="PRE_PURCHASE"?"Pre-Purchase":"Condition"}
+                      <span style={{ padding:"2px 8px", borderRadius:20, fontSize:13, fontWeight:500, background:inspectionTypeColor(insp.inspection_type).bg, color:inspectionTypeColor(insp.inspection_type).fg }}>
+                        {inspectionTypeLabel(insp.inspection_type)}
                       </span>
                     </td>
                     <td style={{ padding:"9px 12px", color:"#6B7280", whiteSpace:"nowrap" }}>{fmt(insp.started_at??insp.created_at)}</td>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { sql, getClaims } from "@/lib/db";
+import { VESSEL_TYPES } from "@/lib/labels";
 import { imoError } from "@/lib/imo";
 
 export async function POST(req: Request) {
@@ -8,7 +9,7 @@ export async function POST(req: Request) {
     const {
       vesselId, vesselName, imoNumber, vesselType, inspectionType,
       answers, questionMeta, remarks, attachments,
-      inventory, projection, sparesCheck, defects,
+      inventory, projection, sparesCheck, defects, inspectorName,
     } = body;
 
     // Vessel Name and IMO Number are the only required vessel fields; vesselId
@@ -32,10 +33,44 @@ export async function POST(req: Request) {
       }
     }
 
+    // No vesselId: find the caller's vessel with this IMO, or register one from what was typed.
+    // An existing vessel is linked as-is and never overwritten. The registry has no owner/class
+    // data to invent: only name, IMO and type are NOT NULL, the rest stays empty.
+    let linkedVesselId: string | null = vesselId || null;
+    if (!linkedVesselId) {
+      const found = await sql`SELECT id FROM vessels WHERE imo_number = ${enteredImo} AND organization_id = app_org_id()` as any[];
+      if (found.length > 0) {
+        linkedVesselId = found[0].id;
+      } else {
+        if (!(VESSEL_TYPES as readonly string[]).includes(vesselType)) {
+          return NextResponse.json({ error: "Vessel Type is required to register a new vessel." }, { status: 400 });
+        }
+        // ON CONFLICT covers two saves racing on the same new IMO (unique per org).
+        const created = await sql`
+          INSERT INTO vessels (name, imo_number, vessel_type)
+          VALUES (${enteredName}, ${enteredImo}, ${vesselType})
+          ON CONFLICT (organization_id, imo_number) DO NOTHING
+          RETURNING id
+        ` as any[];
+        if (created.length > 0) linkedVesselId = created[0].id;
+        else {
+          const again = await sql`SELECT id FROM vessels WHERE imo_number = ${enteredImo} AND organization_id = app_org_id()` as any[];
+          linkedVesselId = again[0]?.id ?? null;
+        }
+      }
+    }
+
+    // Inspector: the form's name if given, otherwise the signed-in user's full name.
+    let inspector = typeof inspectorName === "string" ? inspectorName.trim() : "";
+    if (!inspector) {
+      const claims = await getClaims();
+      inspector = claims?.name?.trim() ?? "";
+    }
+
     // 1. Create inspection record
     const [inspection] = await sql`
-      INSERT INTO inspections (vessel_id, entered_vessel_name, entered_imo_number, inspection_type, status, started_at)
-      VALUES (${vesselId || null}, ${enteredName}, ${enteredImo}, ${inspectionType}, 'IN_PROGRESS', CURRENT_DATE)
+      INSERT INTO inspections (vessel_id, entered_vessel_name, entered_imo_number, inspection_type, status, started_at, inspector_name)
+      VALUES (${linkedVesselId}, ${enteredName}, ${enteredImo}, ${inspectionType}, 'IN_PROGRESS', CURRENT_DATE, ${inspector || null})
       RETURNING id
     ` as any[];
 

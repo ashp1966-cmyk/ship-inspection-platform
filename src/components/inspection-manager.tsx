@@ -16,6 +16,7 @@ const GRADE_BG: Record<string,string> = {
   GOOD:"#D1FAE5", FAIR:"#FEF3C7", POOR:"#FED7AA", ACTION_REQUIRED:"#FEE2E2"
 };
 const fmt=(d:string)=>d?new Date(d).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"—";
+import { inspectionTypeLabel } from "@/lib/labels";
 const TYPES:Record<string,string>={BULK_CARRIER:"Bulk Carrier",CONTAINER_SHIP:"Container Ship",OIL_TANKER:"Oil Tanker",LNG_CARRIER:"LNG Carrier",GENERAL_CARGO:"General Cargo",LPG_TANKER:"LPG Tanker",CRUISE_SHIP:"Cruise Ship"};
 
 function ScoreDial({ score, label }: { score: number; label: string }) {
@@ -120,10 +121,10 @@ export default function InspectionManager({ inspection, items, sections }: {
             <div>
               <h1 style={{ fontSize:23, fontWeight:700, color:"#1A2533", margin:0 }}>{insp.vessel_name ?? "Unknown Vessel"}</h1>
               <p style={{ fontSize:15, color:"#6B7280", margin:"3px 0 0" }}>
-                IMO {insp.imo_number ?? "—"} · {TYPES[insp.vessel_type] ?? insp.vessel_type} · {insp.flag ?? ""} · {insp.class_society ?? ""}
+                IMO {insp.imo_number ?? "—"} · {(insp.vessel_type && (TYPES[insp.vessel_type] ?? insp.vessel_type)) || "—"} · {insp.flag ?? ""} · {insp.class_society ?? ""}
               </p>
               <p style={{ fontSize:14, color:"#9CA3AF", marginTop:2 }}>
-                {insp.inspection_type==="PRE_PURCHASE"?"Pre-Purchase Inspection":"Condition Inspection"} · {fmt(insp.started_at ?? insp.created_at)}
+                {inspectionTypeLabel(insp.inspection_type)} Inspection · {fmt(insp.started_at ?? insp.created_at)}
               </p>
             </div>
             <span style={{ padding:"4px 14px", borderRadius:20, fontSize:14, fontWeight:600, background: STATUS_BG[insp.status??"DRAFT"], color:STATUS_COLOR[insp.status??"DRAFT"] }}>

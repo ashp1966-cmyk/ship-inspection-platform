@@ -312,7 +312,7 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
         body: JSON.stringify({
           vesselId: selectedVessel || null,
           vesselName: vesselName.trim(), imoNumber: imoNumber.trim(),
-          vesselType, inspectionType: type,
+          vesselType, inspectionType: type, inspectorName: inspectorName.trim() || undefined,
           answers, questionMeta: buildQuestionMeta(type), remarks, attachments,
           inventory: type==="PRE_PURCHASE" ? inventory : undefined,
           projection: type==="PRE_PURCHASE" ? projection : undefined,

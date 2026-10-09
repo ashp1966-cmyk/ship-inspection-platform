@@ -1,4 +1,5 @@
 "use client";
+import { inspectionTypeLabel } from "@/lib/labels";
 const GRADE_COLOR:Record<string,string>={GOOD:"#065F46",FAIR:"#92400E",POOR:"#C2410C",ACTION_REQUIRED:"#DC2626",NA:"#6B7280",NOT_SEEN:"#6B7280"};
 const GRADE_BG:Record<string,string>={GOOD:"#D1FAE5",FAIR:"#FEF3C7",POOR:"#FED7AA",ACTION_REQUIRED:"#FEE2E2",NA:"#F3F4F6",NOT_SEEN:"#F3F4F6"};
 const fmt=(d:string)=>d?new Date(d).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"—";
@@ -34,7 +35,7 @@ export default function ReportDetail({ inspection, items }: { inspection: any, i
             <div>
               <h1 style={{ fontSize:25, fontWeight:700, color:"#1A2533", margin:0 }}>{inspection.vessel_name ?? "Unknown Vessel"}</h1>
               <p style={{ fontSize:15, color:"#6B7280", margin:"4px 0 0" }}>
-                IMO {inspection.imo_number ?? "—"} · {inspection.vessel_type} · {inspection.flag ?? ""} · {inspection.class_society ?? ""}
+                IMO {inspection.imo_number ?? "—"} · {inspection.vessel_type ?? "—"} · {inspection.flag ?? ""} · {inspection.class_society ?? ""}
               </p>
               <p style={{ fontSize:15, color:"#6B7280", marginTop:2 }}>
                 DWT {inspection.dwt ? Number(inspection.dwt).toLocaleString() : "—"} · {inspection.main_engine_make ?? ""} {inspection.main_engine_model ?? ""}
@@ -42,7 +43,7 @@ export default function ReportDetail({ inspection, items }: { inspection: any, i
             </div>
             <div style={{ textAlign:"right" }}>
               <span style={{ padding:"3px 10px", borderRadius:20, fontSize:14, fontWeight:600, background:"#E0F2FE", color:"#0369A1" }}>
-                {inspection.inspection_type === "PRE_PURCHASE" ? "Pre-Purchase Inspection" : "Condition Inspection"}
+                {inspectionTypeLabel(inspection.inspection_type)} Inspection
               </span>
               <p style={{ fontSize:14, color:"#6B7280", marginTop:6 }}>Date: {fmt(inspection.started_at ?? inspection.created_at)}</p>
               {inspection.inspector_name && <p style={{ fontSize:14, color:"#6B7280" }}>Inspector: {inspection.inspector_name}</p>}

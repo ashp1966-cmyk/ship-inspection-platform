@@ -1,4 +1,5 @@
 "use client";
+import { inspectionTypeLabel } from "@/lib/labels";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -94,7 +95,7 @@ export default function AiNarrative({ inspections }: { inspections: InspectionRo
               <SelectContent>
                 {inspections.map(i => (
                   <SelectItem key={i.id} value={i.id}>
-                    {i.vessel_name ?? "Unnamed vessel"} — {i.inspection_type === "PRE_PURCHASE" ? "Pre-Purchase" : "Condition"} — {i.total_items} item{i.total_items !== 1 ? "s" : ""}
+                    {i.vessel_name ?? "Unnamed vessel"} — {inspectionTypeLabel(i.inspection_type)} — {i.total_items} item{i.total_items !== 1 ? "s" : ""}
                   </SelectItem>
                 ))}
               </SelectContent>

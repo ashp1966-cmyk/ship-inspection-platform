@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 const TEAL="#1BA5C0", NAV="#0A1628";
+import { inspectionTypeLabel, inspectionTypeColor } from "@/lib/labels";
 const TYPES:Record<string,string>={BULK_CARRIER:"Bulk Carrier",CONTAINER_SHIP:"Container Ship",OIL_TANKER:"Oil Tanker",LNG_CARRIER:"LNG Carrier",GENERAL_CARGO:"General Cargo",LPG_TANKER:"LPG Tanker",CRUISE_SHIP:"Cruise Ship"};
 const GRADE_COLOR:Record<string,string>={GOOD:"#065F46",FAIR:"#92400E",POOR:"#C2410C",ACTION_REQUIRED:"#DC2626"};
 const STATUS_COLOR:Record<string,string>={DRAFT:"#6B7280",IN_PROGRESS:"#D97706",COMPLETED:"#2563EB",ISSUED:"#059669"};
@@ -38,6 +39,8 @@ export default function ReportsList({ inspections }: { inspections: any[] }) {
             <option value="ALL">All types</option>
             <option value="CONDITION">Condition</option>
             <option value="PRE_PURCHASE">Pre-Purchase</option>
+            <option value="TECHNICAL">Technical</option>
+            <option value="RIGHTSHIP">RightShip</option>
           </select>
           <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}
             style={{ padding:"9px 14px", border:"1px solid #D1D5DB", borderRadius:8, fontSize:15, background:"#fff" }}>
@@ -70,8 +73,8 @@ export default function ReportsList({ inspections }: { inspections: any[] }) {
                     </td>
                     <td style={{ padding:"9px 12px", color:"#6B7280" }}>{TYPES[r.vessel_type]??r.vessel_type??'—'}</td>
                     <td style={{ padding:"9px 12px" }}>
-                      <span style={{ padding:"2px 8px", borderRadius:20, fontSize:13, fontWeight:500, background:r.inspection_type==="PRE_PURCHASE"?"#FEF3C7":"#E0F2FE", color:r.inspection_type==="PRE_PURCHASE"?"#92400E":"#0369A1" }}>
-                        {r.inspection_type==="PRE_PURCHASE"?"Pre-Purchase":"Condition"}
+                      <span style={{ padding:"2px 8px", borderRadius:20, fontSize:13, fontWeight:500, background:inspectionTypeColor(r.inspection_type).bg, color:inspectionTypeColor(r.inspection_type).fg }}>
+                        {inspectionTypeLabel(r.inspection_type)}
                       </span>
                     </td>
                     <td style={{ padding:"9px 12px", color:"#6B7280", whiteSpace:"nowrap" }}>{fmt(r.started_at??r.created_at)}</td>
