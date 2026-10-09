@@ -59,3 +59,11 @@ export async function requireEditor(): Promise<{ actor: Actor } | { error: NextR
   }
   return { actor: { id: u.id, organization_id: u.organization_id, role: u.role, is_platform_admin: u.is_platform_admin } };
 }
+
+// For server components: may the signed-in user create/edit? (Same rule as requireEditor.)
+export async function canEditNow(): Promise<boolean> {
+  const claims = await getClaims();
+  if (!claims) return false;
+  const [u] = (await sql`SELECT role, is_active FROM users WHERE id = ${claims.sub}`) as any[];
+  return !!u && u.is_active && EDITOR_ROLES.includes(u.role);
+}

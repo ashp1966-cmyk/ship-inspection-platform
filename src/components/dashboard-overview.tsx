@@ -14,7 +14,7 @@ const TYPES:Record<string,string>={BULK_CARRIER:"Bulk Carrier",CONTAINER_SHIP:"C
 const fmt=(d:string)=>d?new Date(d).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"—";
 const NAV="#0A1628", TEAL="#1BA5C0";
 
-export default function DashboardOverview({ stats, recentInspections, deficiencies }:{stats:Stats;recentInspections:RecentInspection[];deficiencies:Deficiency[]}) {
+export default function DashboardOverview({ stats, recentInspections, deficiencies, canEdit }:{stats:Stats;recentInspections:RecentInspection[];deficiencies:Deficiency[];canEdit:boolean}) {
   const [defs, setDefs] = useState<Deficiency[]>(deficiencies);
   const [activeTab, setActiveTab] = useState<"all"|"open"|"in_progress"|"closed">("open");
   const [actionId, setActionId] = useState<string|null>(null);
@@ -89,7 +89,7 @@ export default function DashboardOverview({ stats, recentInspections, deficienci
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                 <thead>
                   <tr style={{ background:"#F9FAFB" }}>
-                    {["Vessel","Type","Inspection","Inspector","Date","Status","Grade"].map(h=>(
+                    {["Vessel","Type","Inspection","Inspector","Date","Status","Grade",""].map(h=>(
                       <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontWeight:500, color:"#6B7280", fontSize:11, textTransform:"uppercase", letterSpacing:"0.05em", whiteSpace:"nowrap" }}>{h}</th>
                     ))}
                   </tr>
@@ -106,6 +106,11 @@ export default function DashboardOverview({ stats, recentInspections, deficienci
                         <span style={{ padding:"2px 8px", borderRadius:20, fontSize:11, fontWeight:500, background:"#E0F2FE", color:"#0369A1" }}>{r.status??"Draft"}</span>
                       </td>
                       <td style={{ padding:"9px 12px", color:"#6B7280" }}>{r.overall_grade??"—"}</td>
+                      <td style={{ padding:"9px 12px", whiteSpace:"nowrap" }}>
+                        {canEdit && r.status==="IN_PROGRESS" && (
+                          <Link href={`/inspections/${r.id}/edit`} style={{ padding:"3px 10px", background:TEAL, color:"#fff", borderRadius:5, fontSize:12, textDecoration:"none" }}>Continue</Link>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

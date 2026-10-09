@@ -21,7 +21,7 @@ export interface ItemRow {
   grade_value: string | null;
   bool_value: boolean | null;
   text_value: string | null;
-  number_value: number | null;
+  number_value: string | null;
   date_value: string | null;
   remarks: string | null;
   equipment_name: string | null;
@@ -89,7 +89,10 @@ function applyAnswer(it: ItemRow, kind: string, raw: string) {
     else if (raw === "NA") it.text_value = "NA";
     else throw new BadRequest(`Invalid Yes/No answer: ${raw}`);
   } else if (kind === "NUMBER") {
-    it.number_value = num(raw);
+    // Kept as the typed text (validated), not a JS number, so "12.50" reloads as "12.50".
+    const t = raw.trim();
+    if (!Number.isFinite(Number(t))) throw new BadRequest(`Not a number: ${raw}`);
+    it.number_value = t;
   } else if (kind === "DATE") {
     if (!ISO_DATE.test(raw)) throw new BadRequest(`Invalid date: ${raw}`);
     it.date_value = raw;
@@ -275,3 +278,28 @@ export function insertQueries(inspId: string, r: Rows) {
   }
   return qs;
 }
+
+// Resolve the vessel an inspection links to. Returns the queries to run first (inside the same
+// transaction) when a new vessel must be registered; the inspection row then picks its vessel_id
+// with VESSEL_ID_SQL. Throws BadRequest for a vessel outside the caller's org or a missing type.
+export const VESSEL_TYPE_VALUES = ["BULK_CARRIER", "CONTAINER_SHIP", "OIL_TANKER", "LNG_CARRIER", "GENERAL_CARGO", "LPG_TANKER", "CRUISE_SHIP"];
+export async function prepareVessel(vesselId: string | null, name: string, imo: string, vesselType: string) {
+  const queries: ReturnType<typeof sql.query>[] = [];
+  if (vesselId) {
+    const own = (await sql`SELECT id FROM vessels WHERE id = ${vesselId} AND organization_id = app_org_id()`) as any[];
+    if (own.length === 0) throw new BadRequest("Selected vessel not found.");
+  } else {
+    const found = (await sql`SELECT id FROM vessels WHERE imo_number = ${imo} AND organization_id = app_org_id()`) as any[];
+    if (found.length === 0) {
+      if (!VESSEL_TYPE_VALUES.includes(vesselType)) throw new BadRequest("Vessel Type is required to register a new vessel.");
+      // ON CONFLICT covers two saves racing on the same new IMO (unique per org).
+      queries.push(sql.query(
+        `INSERT INTO vessels (name, imo_number, vessel_type) VALUES ($1, $2, $3)
+         ON CONFLICT (organization_id, imo_number) DO NOTHING`, [name, imo, vesselType]));
+    }
+  }
+  return queries;
+}
+// SQL expression for the vessel_id: the chosen vessel, else the caller's vessel with the entered IMO.
+export const vesselIdSql = (vesselIdParam: string, imoParam: string) =>
+  `COALESCE(${vesselIdParam}::uuid, (SELECT id FROM vessels WHERE imo_number = ${imoParam}::text AND organization_id = app_org_id()))`;

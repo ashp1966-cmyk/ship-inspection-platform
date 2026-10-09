@@ -16,6 +16,7 @@ import {
 import { projectFleet, usd, HORIZON_YEARS } from "@/lib/capex";
 import { cn } from "@/lib/utils";
 import { imoError } from "@/lib/imo";
+import type { InitialState } from "@/lib/inspection-state";
 import sparesSpec from "../../db/random_spares_check_spec.json";
 
 interface Attachment { name:string; url:string; fileType:"photo"|"document"; size:number; uploading?:boolean; }
@@ -75,23 +76,29 @@ function groupSections(sections: Section[], groups: GroupDef[]) {
     .filter(g => g.sections.length > 0);
 }
 
-export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] }) {
-  const [vesselType, setVesselType] = useState<VesselType>("BULK_CARRIER");
-  const [selectedVessel, setSelectedVessel] = useState<string>("");
-  const [inspectorName, setInspectorName] = useState("");
+export default function InspectionDashboard({ vessels, initial }: { vessels: VesselRow[]; initial?: InitialState }) {
+  // initial = a saved inspection being continued (see /inspections/[id]/edit). Its type's tab is
+  // the only one shown, and saves go to PUT /api/inspections/[id].
+  // saveTarget: once an inspection has been saved (here or earlier), further saves of the SAME type update
+  // it instead of creating a second one.
+  const [saveTarget, setSaveTarget] = useState<{ id:string; type:DefectInspType } | null>(
+    initial ? { id: initial.inspectionId, type: initial.inspectionType } : null);
+  const [vesselType, setVesselType] = useState<VesselType>((initial?.vesselType as VesselType) ?? "BULK_CARRIER");
+  const [selectedVessel, setSelectedVessel] = useState<string>(initial?.vesselId ?? "");
+  const [inspectorName, setInspectorName] = useState(initial?.inspectorName ?? "");
   // Vessel Name + IMO Number are required to save; linking an existing vessel
   // (selectedVessel) is optional and just prefills them.
-  const [vesselName, setVesselName] = useState("");
-  const [imoNumber, setImoNumber] = useState("");
+  const [vesselName, setVesselName] = useState(initial?.vesselName ?? "");
+  const [imoNumber, setImoNumber] = useState(initial?.imoNumber ?? "");
   // Inline only — shown while typing, never blocks input. Empty is handled by
   // the required-field check on save, so don't nag before anything is typed.
   const imoProblem = imoNumber.trim() ? imoError(imoNumber.trim()) : null;
-  const [answers, setAnswers]     = useState<Record<string, string>>({});
-  const [remarks, setRemarks]     = useState<Record<string, string>>({});
-  const [attachments, setAttachments] = useState<Record<string, Attachment[]>>({});
+  const [answers, setAnswers]     = useState<Record<string, string>>(initial?.answers ?? {});
+  const [remarks, setRemarks]     = useState<Record<string, string>>(initial?.remarks ?? {});
+  const [attachments, setAttachments] = useState<Record<string, Attachment[]>>(initial?.attachments ?? {});
   const [expanded, setExpanded]   = useState<Set<string>>(new Set());
-  const [inventory, setInventory] = useState<EquipmentItem[]>(() => getPrePurchaseInventory("BULK_CARRIER"));
-  const [customSections, setCustomSections] = useState<Record<string, Question[]>>({});
+  const [inventory, setInventory] = useState<EquipmentItem[]>(() => initial?.inventory ?? getPrePurchaseInventory((initial?.vesselType as VesselType) ?? "BULK_CARRIER"));
+  const [customSections, setCustomSections] = useState<Record<string, Question[]>>((initial?.customSections as Record<string, Question[]>) ?? {});
   const [addingTo, setAddingTo]   = useState<string|null>(null);
   const [newPrompt, setNewPrompt] = useState("");
   const [newKind, setNewKind]     = useState<Question["answerKind"]>("GRADE");
@@ -105,7 +112,7 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
   const [gradeSuggestions, setGradeSuggestions] = useState<Record<string, {grade:string; reasoning:string}>>({});
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set());
   const [sparesRows, setSparesRows] = useState<SparesRow[]>(() =>
-    Array.from({ length: (sparesSpec as { initialBlankRows:number }).initialBlankRows }, blankSparesRow)
+    initial?.sparesRows ?? Array.from({ length: (sparesSpec as { initialBlankRows:number }).initialBlankRows }, blankSparesRow)
   );
 
   function addSparesRow() {
@@ -120,6 +127,7 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
 
   const [defectRows, setDefectRows] = useState<Record<DefectInspType, DefectRow[]>>({
     CONDITION: [], PRE_PURCHASE: [], TECHNICAL: [], RIGHTSHIP: [],
+    ...(initial ? { [initial.inspectionType]: initial.defectRows } : {}),
   });
 
   function addDefectRow(type: DefectInspType) {
@@ -320,8 +328,9 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
     try {
       const questionMeta = buildQuestionMeta(type);
       const keepKeys = new Set([...Object.keys(questionMeta), ...defectRows[type].map(r => r.rowKey)]);
-      const res = await fetch("/api/inspections", {
-        method:"POST",
+      const updating = saveTarget && saveTarget.type === type ? saveTarget.id : null;
+      const res = await fetch(updating ? `/api/inspections/${updating}` : "/api/inspections", {
+        method: updating ? "PUT" : "POST",
         headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
           vesselId: selectedVessel || null,
@@ -335,7 +344,9 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
           defects: defectRows[type],
         }),
       });
-      if (!res.ok) throw new Error((await res.json()).error);
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(out.error ?? `Save failed (${res.status})`);
+      if (out.id) setSaveTarget({ id: out.id, type });
       setSaved(true); setTimeout(()=>setSaved(false), 3000);
     } catch(e:any) {
       setSaveError(e.message);
@@ -766,7 +777,7 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
       {/* Top bar */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">New Inspection</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{initial ? "Continue Inspection" : "New Inspection"}</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
             {vessels.length} vessel{vessels.length!==1?"s":""} registered
           </p>
@@ -802,12 +813,12 @@ export default function InspectionDashboard({ vessels }: { vessels: VesselRow[] 
         </div>
       </div>
 
-      <Tabs defaultValue="condition">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="condition">Condition Inspection</TabsTrigger>
-          <TabsTrigger value="prepurchase">Pre-Purchase Inspection</TabsTrigger>
-          <TabsTrigger value="technical">Technical Inspection</TabsTrigger>
-          <TabsTrigger value="rightship">RightShip Preparation</TabsTrigger>
+      <Tabs defaultValue={initial ? ({ CONDITION:"condition", PRE_PURCHASE:"prepurchase", TECHNICAL:"technical", RIGHTSHIP:"rightship" } as const)[initial.inspectionType] : "condition"}>
+        <TabsList className={initial ? "grid w-full grid-cols-1" : "grid w-full grid-cols-4"}>
+          {(!initial || initial.inspectionType==="CONDITION") && <TabsTrigger value="condition">Condition Inspection</TabsTrigger>}
+          {(!initial || initial.inspectionType==="PRE_PURCHASE") && <TabsTrigger value="prepurchase">Pre-Purchase Inspection</TabsTrigger>}
+          {(!initial || initial.inspectionType==="TECHNICAL") && <TabsTrigger value="technical">Technical Inspection</TabsTrigger>}
+          {(!initial || initial.inspectionType==="RIGHTSHIP") && <TabsTrigger value="rightship">RightShip Preparation</TabsTrigger>}
         </TabsList>
 
         {/* CONDITION TAB */}

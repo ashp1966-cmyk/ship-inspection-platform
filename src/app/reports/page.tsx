@@ -1,5 +1,6 @@
 import { sql } from "@/lib/db";
 import ReportsList from "@/components/reports-list";
+import { canEditNow } from "@/lib/authz";
 export const dynamic = "force-dynamic";
 
 export default async function ReportsPage() {
@@ -15,5 +16,5 @@ export default async function ReportsPage() {
     GROUP BY i.id, v.name, v.vessel_type, v.imo_number
     ORDER BY i.created_at DESC
   `;
-  return <ReportsList inspections={inspections as any[]} />;
+  return <ReportsList inspections={inspections as any[]} canEdit={await canEditNow()} />;
 }

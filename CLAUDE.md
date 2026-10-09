@@ -559,3 +559,21 @@ AUK is both a tenant (owns all pre-existing data) and the platform admin (`users
 - **Read-only role:** `requireEditor()` (`authz.ts`; fresh DB read, role admin|inspector) guards inspection POST and PATCH, vessel
   POST/PUT/DELETE, deficiency PATCH and `/api/upload`. `viewer` can read everything and write nothing.
 
+### Continue an in-progress inspection (commit B2)
+
+- **Reopen:** `/inspections/[id]/edit` (server page) loads the rows, `buildInitialState()` in `src/lib/inspection-state.ts` (the inverse
+  of `buildRows`) turns them into form state, and `InspectionDashboard` renders with `initial` (only that inspection's tab is shown).
+  The page refuses viewers (read-only notice), other orgs / bad ids (not found) and non-IN_PROGRESS inspections (closed notice).
+- **Save back:** `PUT /api/inspections/[id]` (editors only; 404 other org, 409 not IN_PROGRESS, 400 if the type changes) re-resolves
+  the vessel and, in ONE transaction, updates the header and deletes + re-inserts items, attachments, spares and capex. Only
+  `attachments` ROWS are replaced (same `file_url`); **blobs are never deleted**, so a photo removed in the form is an orphan blob.
+  Deficiency status/action/closed_at are carried across by (section_code, prompt). Stale `section_scores` and the three score
+  columns + `overall_grade` are cleared; the report page's "Calculate score" recomputes. Completing still goes through
+  `PATCH` `update_status`.
+- After the first successful Save the form switches to PUT for that inspection (it used to POST a new duplicate on every click).
+- **Continue** buttons: dashboard "Recent inspections" and Reports, IN_PROGRESS rows only, hidden for viewers (`canEditNow()`).
+- Known limit: inventory rows reload as saved; if all were removed before saving, the defaults for the vessel type reappear.
+  The vessel type used for the question set comes from the linked vessel, not from the type picked at save time.
+- `scripts/e2e-resume.mjs` drives the real form for all four types (save partial -> reopen -> identical -> edit -> save -> reopen),
+  plus viewer/other-org/COMPLETED/deficiency/score/blob checks. Same guards as e2e-tenancy; throwaway org; cleanup by exact id.
+

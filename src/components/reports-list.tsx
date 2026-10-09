@@ -9,7 +9,7 @@ const STATUS_COLOR:Record<string,string>={DRAFT:"#6B7280",IN_PROGRESS:"#D97706",
 const STATUS_BG:Record<string,string>={DRAFT:"#F3F4F6",IN_PROGRESS:"#FEF3C7",COMPLETED:"#EFF6FF",ISSUED:"#ECFDF5"};
 const fmt=(d:string)=>d?new Date(d).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"—";
 
-export default function ReportsList({ inspections }: { inspections: any[] }) {
+export default function ReportsList({ inspections, canEdit }: { inspections: any[]; canEdit: boolean }) {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -96,6 +96,7 @@ export default function ReportsList({ inspections }: { inspections: any[] }) {
                     </td>
                     <td style={{ padding:"9px 12px", whiteSpace:"nowrap", display:"flex", gap:4 }}>
                       <Link href={`/inspections/${r.id}`} style={{ padding:"3px 10px", background:TEAL, color:"#fff", borderRadius:5, fontSize:14, textDecoration:"none" }}>View</Link>
+                      {canEdit && r.status==="IN_PROGRESS" && <Link href={`/inspections/${r.id}/edit`} style={{ padding:"3px 10px", background:"#0A1628", color:"#fff", borderRadius:5, fontSize:14, textDecoration:"none" }}>Continue</Link>}
                       {r.vessel_id && <Link href={`/vessels/${r.vessel_id}`} style={{ padding:"3px 8px", background:"#F3F4F6", color:"#374151", borderRadius:5, fontSize:14, textDecoration:"none" }}>History</Link>}
                     </td>
                   </tr>

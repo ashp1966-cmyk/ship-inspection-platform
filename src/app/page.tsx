@@ -1,5 +1,6 @@
 import { sql } from "@/lib/db";
 import DashboardOverview from "@/components/dashboard-overview";
+import { canEditNow } from "@/lib/authz";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,7 @@ export default async function Page() {
       stats={stats}
       recentInspections={recentInspections as any[]}
       deficiencies={deficiencies as any[]}
+      canEdit={await canEditNow()}
     />
   );
 }

@@ -1,9 +1,18 @@
 import { sql } from "@/lib/db";
 import InspectionDashboard from "@/components/inspection-dashboard";
+import { canEditNow } from "@/lib/authz";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewInspectionPage() {
+  if (!(await canEditNow())) {
+    return (
+      <div style={{ padding: "2rem", maxWidth: 640 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 600 }}>Read-only access</h1>
+        <p style={{ color: "#6B7280", marginTop: 8 }}>Your role can view inspections but not create them.</p>
+      </div>
+    );
+  }
   const vessels = await sql`
     SELECT id, name, imo_number, vessel_type FROM vessels ORDER BY name
   `;
