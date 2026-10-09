@@ -4,7 +4,12 @@ import { canEditNow } from "@/lib/authz";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewInspectionPage() {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// ?vessel=<id> (the Vessels page's "Inspect" button) prefills name, IMO and type. The vessel must be
+// in the caller's own organization (a platform admin can *see* other orgs' vessels, so RLS alone is
+// not enough); anything else is silently ignored and the form opens blank.
+export default async function NewInspectionPage(props: { searchParams: Promise<{ vessel?: string | string[] }> }) {
   if (!(await canEditNow())) {
     return (
       <div style={{ padding: "2rem", maxWidth: 640 }}>
@@ -13,6 +18,11 @@ export default async function NewInspectionPage() {
       </div>
     );
   }
+  const { vessel } = await props.searchParams;
+  const vesselParam = typeof vessel === "string" && UUID_RE.test(vessel) ? vessel : null;
+  const [prefill] = vesselParam
+    ? ((await sql`SELECT id, name, imo_number, vessel_type FROM vessels WHERE id = ${vesselParam} AND organization_id = app_org_id()`) as any[])
+    : [];
   const vessels = await sql`
     SELECT id, name, imo_number, vessel_type FROM vessels ORDER BY name
   `;
@@ -22,7 +32,7 @@ export default async function NewInspectionPage() {
         <a href="/" style={{ color:"#1BA5C0", textDecoration:"none" }}>Dashboard</a>
         {" / New Inspection"}
       </div>
-      <InspectionDashboard vessels={vessels as any} />
+      <InspectionDashboard vessels={vessels as any} prefillVessel={prefill} />
     </div>
   );
 }

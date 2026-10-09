@@ -76,20 +76,20 @@ function groupSections(sections: Section[], groups: GroupDef[]) {
     .filter(g => g.sections.length > 0);
 }
 
-export default function InspectionDashboard({ vessels, initial }: { vessels: VesselRow[]; initial?: InitialState }) {
+export default function InspectionDashboard({ vessels, initial, prefillVessel }: { vessels: VesselRow[]; initial?: InitialState; prefillVessel?: VesselRow }) {
   // initial = a saved inspection being continued (see /inspections/[id]/edit). Its type's tab is
   // the only one shown, and saves go to PUT /api/inspections/[id].
   // saveTarget: once an inspection has been saved (here or earlier), further saves of the SAME type update
   // it instead of creating a second one.
   const [saveTarget, setSaveTarget] = useState<{ id:string; type:DefectInspType } | null>(
     initial ? { id: initial.inspectionId, type: initial.inspectionType } : null);
-  const [vesselType, setVesselType] = useState<VesselType>((initial?.vesselType as VesselType) ?? "BULK_CARRIER");
-  const [selectedVessel, setSelectedVessel] = useState<string>(initial?.vesselId ?? "");
+  const [vesselType, setVesselType] = useState<VesselType>((initial?.vesselType as VesselType) ?? prefillVessel?.vessel_type ?? "BULK_CARRIER");
+  const [selectedVessel, setSelectedVessel] = useState<string>(initial?.vesselId ?? prefillVessel?.id ?? "");
   const [inspectorName, setInspectorName] = useState(initial?.inspectorName ?? "");
   // Vessel Name + IMO Number are required to save; linking an existing vessel
   // (selectedVessel) is optional and just prefills them.
-  const [vesselName, setVesselName] = useState(initial?.vesselName ?? "");
-  const [imoNumber, setImoNumber] = useState(initial?.imoNumber ?? "");
+  const [vesselName, setVesselName] = useState(initial?.vesselName ?? prefillVessel?.name ?? "");
+  const [imoNumber, setImoNumber] = useState(initial?.imoNumber ?? prefillVessel?.imo_number ?? "");
   // Inline only — shown while typing, never blocks input. Empty is handled by
   // the required-field check on save, so don't nag before anything is typed.
   const imoProblem = imoNumber.trim() ? imoError(imoNumber.trim()) : null;
@@ -97,7 +97,7 @@ export default function InspectionDashboard({ vessels, initial }: { vessels: Ves
   const [remarks, setRemarks]     = useState<Record<string, string>>(initial?.remarks ?? {});
   const [attachments, setAttachments] = useState<Record<string, Attachment[]>>(initial?.attachments ?? {});
   const [expanded, setExpanded]   = useState<Set<string>>(new Set());
-  const [inventory, setInventory] = useState<EquipmentItem[]>(() => initial?.inventory ?? getPrePurchaseInventory((initial?.vesselType as VesselType) ?? "BULK_CARRIER"));
+  const [inventory, setInventory] = useState<EquipmentItem[]>(() => initial?.inventory ?? getPrePurchaseInventory((initial?.vesselType as VesselType) ?? prefillVessel?.vessel_type ?? "BULK_CARRIER"));
   const [customSections, setCustomSections] = useState<Record<string, Question[]>>((initial?.customSections as Record<string, Question[]>) ?? {});
   const [addingTo, setAddingTo]   = useState<string|null>(null);
   const [newPrompt, setNewPrompt] = useState("");

@@ -68,12 +68,15 @@ async function snapshot(id) {
   return { h, items, atts, spares, capex, json: JSON.stringify({ h, items, atts, spares, capex }) };
 }
 
-const TYPES = [
+const ALL_TYPES = [
   { type: "CONDITION", tab: "Condition Inspection", save: "Save condition inspection" },
   { type: "PRE_PURCHASE", tab: "Pre-Purchase Inspection", save: "Save pre-purchase inspection" },
   { type: "TECHNICAL", tab: "Technical Inspection", save: "Save technical inspection" },
   { type: "RIGHTSHIP", tab: "RightShip Preparation", save: "Save rightship preparation" },
 ];
+
+// E2E_TYPES=CONDITION,TECHNICAL limits the run (default: all four).
+const TYPES = process.env.E2E_TYPES ? ALL_TYPES.filter((t) => process.env.E2E_TYPES.split(",").includes(t.type)) : ALL_TYPES;
 
 const panelOf = (page) => page.locator('[role=tabpanel][data-state=active]');
 const CONTROLS = 'button[role=combobox][id], input[id]:not([type=file])';
@@ -351,7 +354,7 @@ try {
   await dash.goto("/");
   check("dashboard shows Continue on IN_PROGRESS rows", (await dash.getByRole("link", { name: "Continue" }).count()) >= 1);
   await dash.goto("/reports");
-  check("reports shows Continue on IN_PROGRESS rows", (await dash.getByRole("link", { name: "Continue" }).count()) >= 4);
+  check("reports shows Continue on IN_PROGRESS rows", (await dash.getByRole("link", { name: "Continue" }).count()) >= TYPES.length);
   const mismatch = await inspCtx.request.put(`/api/inspections/${first.id}`, { data: { ...body, inspectionType: "TECHNICAL" } });
   check("changing the inspection type via PUT -> 400", mismatch.status() === 400);
 
@@ -371,8 +374,8 @@ try {
   await owner`UPDATE inspections SET overall_score = 77, condition_score = 70, management_score = 80, overall_grade = 'FAIR' WHERE id = ${first.id}`;
   await owner`INSERT INTO section_scores (inspection_id, section_code, section_title, score, total_items, graded_items, deficiency_count, organization_id)
               VALUES (${first.id}, 'X', 'X', 50, 1, 1, 0, ${orgA})`;
-  await pg.getByRole("button", { name: saveName }).click();
-  await pg.waitForTimeout(2500);
+  const r6 = await saveForm(pg, saveName); // wait for the PUT itself, not a fixed delay
+  check("score-clearing save (PUT) succeeds", r6.status === 200, `status ${r6.status}`);
   const sc = (await owner`SELECT overall_score, overall_grade, (SELECT count(*)::int FROM section_scores WHERE inspection_id = ${first.id}) AS n FROM inspections WHERE id = ${first.id}`)[0];
   check("stale scores cleared by an update", sc.overall_score === null && sc.overall_grade === null && sc.n === 0, JSON.stringify(sc));
 
@@ -388,7 +391,7 @@ try {
   check("/edit on a COMPLETED inspection shows a closed notice", (await pg.getByText("This inspection is closed").count()) === 1);
   await pg.goto("/reports");
   const rowsCont = await pg.getByRole("link", { name: "Continue" }).count();
-  check("no Continue on the COMPLETED row", rowsCont === 3, `${rowsCont} Continue links for 3 in-progress rows`);
+  check("no Continue on the COMPLETED row", rowsCont === TYPES.length - 1, `${rowsCont} Continue links for ${TYPES.length - 1} in-progress rows`);
   await inspCtx.close();
 } catch (e) {
   check("e2e ran without unexpected error", false, e.stack);

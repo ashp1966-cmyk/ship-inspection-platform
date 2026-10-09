@@ -388,7 +388,7 @@ email = ... AND is_active = true` since it was first written, but the `users` ta
 existed in `db/schema.sql` or the live DB — another instance of the "recurring pattern: things
 referenced in code that were never created in the DB" family documented above. It never
 surfaced as a crash because the route wraps that query in try/catch and falls back to the
-`AUTH_EMAIL`/`AUTH_PASSWORD` env-var admin on any DB error — so every login before this fix
+a hard-coded env-var admin on any DB error (since removed) — so every login before this fix
 silently used the env-var path, DB or no DB.
 
 **Fix:** added `users` and `password_reset_tokens` tables to `db/schema.sql` and the live DB (see
@@ -400,7 +400,7 @@ already used by the DB-user path in `/api/auth/login`; no new library introduced
   stores a sha256 hash of a random 32-byte token (never the plaintext) with a 1-hour expiry in
   `password_reset_tokens`, and emails the plaintext reset link via Resend (same
   `RESEND_API_KEY`/`fetch("https://api.resend.com/emails")` pattern as
-  `src/app/api/alerts/route.ts`), built from `NEXT_PUBLIC_APP_URL` — see the note above about
+  the since-removed alerts route), built from `NEXT_PUBLIC_APP_URL` — see the note above about
   keeping that var current after a domain change.
 - `POST /api/auth/reset-password` — hashes the submitted token, checks it against
   `password_reset_tokens` for an unused, unexpired match, updates `users.password_hash`
@@ -416,7 +416,7 @@ just local/unit-level): requested a reset, confirmed the token row landed in
 `password_reset_tokens`, completed the reset with a freshly generated token, confirmed
 `users.password_hash` actually changed and the new password verifies via `bcrypt.compare`, and
 confirmed a second attempt to reuse the same token is rejected. The admin's original password was
-restored immediately after the test so it still matches the documented `AUTH_PASSWORD` env var.
+restored immediately after the test.
 
 **When adding any other DB-backed feature to this app going forward:** check
 `information_schema.tables`/`.columns` against the *live* DB before trusting that a table a route
@@ -493,7 +493,7 @@ AUK is both a tenant (owns all pre-existing data) and the platform admin (`users
   sessions are forced to re-login). `AUTH_SECRET` has no fallback any more.
 - Pre-login flows (login, forgot/reset password) use `preAuthSql` (no org context) + the
   SECURITY DEFINER `auth_find_user()` / `auth_set_password()`; they cannot read RLS tables directly.
-  The old `AUTH_EMAIL`/`AUTH_PASSWORD` env-var login fallback was removed (no org to put in a token).
+  The old env-var login fallback was removed (no org to put in a token).
 - RLS does not cover **foreign-key targets** (FK checks bypass it) or **non-DB resources**. So
   `POST /api/inspections` explicitly checks a linked `vesselId` is in the caller's org, and
   `/api/upload` namespaces blobs under `<organization_id>/`.
@@ -523,7 +523,7 @@ AUK is both a tenant (owns all pre-existing data) and the platform admin (`users
 - **`/api/*` without a session returns 401 JSON** (proxy); pages still redirect to `/login`.
 - **`api/alerts` removed**: nothing called it, `alert_log` never existed in the DB, and it interpolated request
   fields into email HTML. If deficiency alerting is wanted later, build it with an `alert_log` table that has
-  `organization_id` + RLS like the other tenant tables. `ALERT_EMAIL` is now unused.
+  `organization_id` + RLS like the other tenant tables.
 - `db/schema.sql` builds from scratch with no manual step (verified by applying it to a fresh PGlite database):
   helper functions precede first use and AUK is seeded with its fixed id. Migration 005 had a `GRANT ... TO ship_app`
   before `CREATE ROLE ship_app` (invisible on the live DB where the role existed); fixed in both files.
@@ -576,4 +576,17 @@ AUK is both a tenant (owns all pre-existing data) and the platform admin (`users
   The vessel type used for the question set comes from the linked vessel, not from the type picked at save time.
 - `scripts/e2e-resume.mjs` drives the real form for all four types (save partial -> reopen -> identical -> edit -> save -> reopen),
   plus viewer/other-org/COMPLETED/deficiency/score/blob checks. Same guards as e2e-tenancy; throwaway org; cleanup by exact id.
+
+### Vessels "Inspect" prefill (commit C)
+
+- `/inspections/new?vessel=<id>` (the Vessels page's Inspect button, also vessel history) prefills vessel name, IMO, type and the
+  vessel selector. The id must be a UUID **and** the vessel must be in the caller's own org (`organization_id = app_org_id()`;
+  a platform admin can see other orgs' vessels, so RLS alone is not enough). Anything else is ignored and the form opens blank.
+  Saving the prefilled form links that vessel (`vesselId`), so no duplicate vessel is created.
+
+### Deploy / env summary (current)
+
+Runtime env vars: `DATABASE_URL_APP` (the app, as `ship_app`), `AUTH_SECRET`, `RESEND_API_KEY`, `NEXT_PUBLIC_APP_URL`,
+`ANTHROPIC_API_KEY`, `BLOB_READ_WRITE_TOKEN`. `DATABASE_URL` (owner) is for migrations/scripts only. Migrations are applied by hand
+to the live Neon DB and mirrored in `db/migrations` + `db/schema.sql` (latest: 008).
 
